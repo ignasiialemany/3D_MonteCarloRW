@@ -4,10 +4,10 @@
 
 #include "walkers.h"
 
-walkers::walkers(int N_p_input, int seed_input, std::string stepType_input) {
-    N_p = N_p_input;
-    rng_seed = seed_input;
-    stepType = stepType_input;
+walkers::walkers(const int N_p, const int seed, const std::string &stepType) {
+    this->N_p = N_p;
+    this->rng_seed = seed;
+    this->stepType = stepType;
 
     //Generate unique seeds for each particle and init positions/phase/flags
     generate_unique_seeds();

@@ -11,11 +11,13 @@ public:
     walkers()=default;
     ~walkers() = default;
 
-    walkers(int N_p_input, int seed_input, std::string stepType_input); //Construtor definition
+    walkers(int N_p, int seed, const std::string &stepType); //Construtor definition
 
     std::set<unsigned int> get_seed_set();
-    void set_positions(Eigen::MatrixXd &pos);
+    void set_positions(Eigen::MatrixXd &pos );
+    Eigen::MatrixXd get_positions() {return positions;};
     int get_Np() const {return N_p;};
+    int get_seed() const {return rng_seed;};
 
 private:
     int N_p; //Number of particles
