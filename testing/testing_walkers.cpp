@@ -6,7 +6,7 @@ bool unique_seeds(unsigned int seed1, unsigned int seed2){
     walkers first_set_of_particles(10000, seed1,"constant");
     walkers second_set_of_particles(10000,seed2,"constant");
 
-    return first_set_of_particles.get_seed_set()==second_set_of_particles.get_seed_set();
+    return first_set_of_particles.get_seeds()==second_set_of_particles.get_seeds();
 }
 
 TEST_CASE( "Unique seeds is checked", "[unique seeds]" ) {
