@@ -1,1 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/c++ -g -arch x86_64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX13.1.sdk -mmacosx-version-min=12.4 -Wl,-search_paths_first -Wl,-headerpad_max_install_names "CMakeFiles/yaml-cpp-parse.dir/parse.cpp.o" -o parse  ../libyaml-cppd.a 

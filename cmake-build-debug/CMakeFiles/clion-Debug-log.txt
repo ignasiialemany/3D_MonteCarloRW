@@ -1,6 +1,0 @@
-/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_DEPENDS_USE_COMPILER=FALSE -G "CodeBlocks - Unix Makefiles" -S /Users/ia4118/CLionProjects/3D_RandomWalk -B /Users/ia4118/CLionProjects/3D_RandomWalk/cmake-build-debug
--- Performing Test HAVE_FLAG__ffile_prefix_map__Users_ia4118_CLionProjects_3D_RandomWalk_third_party_Catch2_3_3_1__
--- Performing Test HAVE_FLAG__ffile_prefix_map__Users_ia4118_CLionProjects_3D_RandomWalk_third_party_Catch2_3_3_1__ - Success
--- Configuring done
--- Generating done
--- Build files have been written to: /Users/ia4118/CLionProjects/3D_RandomWalk/cmake-build-debug
