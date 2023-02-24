@@ -31,8 +31,12 @@ std::set<unsigned int> walkers::get_seed_set() {
     return seed_set;
 }
 
-void walkers::set_positions(Eigen::MatrixXd &pos) {
+void walkers::init_positions(Eigen::MatrixXd &pos) {
     this->positions = pos;
+}
+
+void walkers::set_position(Eigen::VectorXd& pos, int index) {
+    this->positions(index,Eigen::all) = pos.transpose();
 }
 
 

@@ -10,17 +10,33 @@
 class simulation {
 
 public:
+
     simulation() = default;
     explicit simulation(const walkers& particles_input);
+    // Copy constructor
+    simulation(const simulation& other) {
+        this->_particles = other._particles;
+    }
+
+    //returning *this allows for chaining assignment operations
+    simulation& operator=(const simulation& other) {
+        if (this != &other) {
+            // Copy all data members from the other object
+            this->_particles = other._particles;
+        }
+        return *this;
+    }
+
 
     bool seedParticlesInBox(const Eigen::VectorXd &boundingbox);
     Eigen::MatrixXd getPositions(){return _particles.get_positions();};
-    //void performScan(sequence sequence_input, substrate substrate_input);
+    void performScan(double diffusion_time, double time_step, int cores);
 
 
 private:
     walkers _particles;
-    std::variant<bool,std::runtime_error> checkBoundingBox(const Eigen::VectorXd &box);
+    static std::variant<bool,std::runtime_error> checkBoundingBox(const Eigen::VectorXd &box);
+    //static void onewalker(VectorXd position,double diffusion_time, double time_step);
     void seeding(const Eigen::VectorXd &box);
 
 };

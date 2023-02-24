@@ -14,10 +14,12 @@ public:
     walkers(int N_p, int seed, const std::string &stepType); //Construtor definition
 
     std::set<unsigned int> get_seed_set();
-    void set_positions(Eigen::MatrixXd &pos );
-    Eigen::MatrixXd get_positions() {return positions;};
-    int get_Np() const {return N_p;};
-    int get_seed() const {return rng_seed;};
+    void init_positions(Eigen::MatrixXd &pos);
+    void set_position(Eigen::VectorXd &pos , int index);
+    Eigen::VectorXd get_position(int index) {return positions(index,Eigen::all).transpose();};
+    Eigen::MatrixXd get_positions(){return positions;};
+    [[nodiscard]] int get_Np() const {return N_p;};
+    [[nodiscard]] int get_seed() const {return rng_seed;};
 
 private:
     int N_p; //Number of particles

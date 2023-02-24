@@ -3,6 +3,7 @@
 //
 
 #include "simulation.h"
+#include <omp.h>
 
 simulation::simulation(const walkers& particles_input) {
     this->_particles = particles_input;
@@ -55,8 +56,27 @@ void simulation::seeding(const Eigen::VectorXd &box) {
         initial_positions(i, 2) = z_interval(seeding);
     }
 
-    _particles.set_positions(initial_positions);
+    _particles.init_positions(initial_positions);
 }
+
+void simulation::performScan(double diffusion_time, double time_step, int cores) {
+    int num_threads = cores; // Set the number of threads to the number of cores available
+    int number_of_particles= _particles.get_Np();
+    #pragma omp parallel num_threads(num_threads) default(none) shared(_particles, number_of_particles)
+    {
+        Eigen::VectorXd position_i(3);
+        #pragma omp for private(position_i)
+        for (int i = 0; i < number_of_particles; i++) {
+            position_i = this->_particles.get_position(i);
+            Eigen::VectorXd step(3);
+            step << 1, 2, 3;
+            Eigen::VectorXd position_updated = position_i + step;
+            this->_particles.set_position(position_updated,i);
+        }
+    }
+    #pragma omp barrier
+}
+
 
 
 
