@@ -20,9 +20,9 @@ bool simulation::seedParticlesInBox(const Eigen::VectorXd &bounding_box) {
     }
 
     //TODO Implement so that if max_point==min_point, this will ensure the code works for 2D,1D boxes
-    Eigen::VectorXd max_points = bounding_box({1, 3, 5});
-    Eigen::VectorXd min_points = bounding_box({0, 2, 4});
-    Eigen::VectorXd side_lengths = max_points - min_points;
+    //Eigen::VectorXd max_points = bounding_box({1, 3, 5});
+    //Eigen::VectorXd min_points = bounding_box({0, 2, 4});
+    //Eigen::VectorXd side_lengths = max_points - min_points;
 
     //Seeding particles in bounding box
     seeding(bounding_box);
@@ -45,7 +45,7 @@ void simulation::seeding(const Eigen::VectorXd &box) {
 
     Eigen::MatrixXd initial_positions(_particles.get_Np(), 3);
     //Specifically for the seeding we will use the general seed as well
-    std::mt19937 seeding(_particles.get_seed());
+    std::mt19937 seeding(_particles.get_global_seed());
     std::uniform_real_distribution<> x_interval(box(0), box(1));
     std::uniform_real_distribution<> y_interval(box(2), box(3));
     std::uniform_real_distribution<> z_interval(box(4), box(5));
@@ -62,20 +62,35 @@ void simulation::seeding(const Eigen::VectorXd &box) {
 void simulation::performScan(double diffusion_time, double time_step, int cores) {
     int num_threads = cores; // Set the number of threads to the number of cores available
     int number_of_particles= _particles.get_Np();
-    #pragma omp parallel num_threads(num_threads) default(none) shared(_particles, number_of_particles)
+    #pragma omp parallel num_threads(num_threads) default(none) shared(_particles, number_of_particles,diffusion_time,time_step)
     {
-        Eigen::VectorXd position_i(3);
+        Eigen::Vector3d position_i;
+        Eigen::Vector3d phase_i;
+        double flag_i;
+        int seed_i;
         #pragma omp for private(position_i)
         for (int i = 0; i < number_of_particles; i++) {
-            position_i = this->_particles.get_position(i);
-            Eigen::VectorXd step(3);
-            step << 1, 2, 3;
-            Eigen::VectorXd position_updated = position_i + step;
-            this->_particles.set_position(position_updated,i);
+            position_i = _particles.get_position(i);
+            phase_i = _particles.get_phase(i);
+            flag_i = _particles.get_flag(i);
+            seed_i = _particles.get_seed(i);
+            one_walker(i,position_i,phase_i,flag_i,diffusion_time,time_step, seed_i);
+            this->_particles.set_position(position_i,i);
         }
     }
     #pragma omp barrier
 }
+
+void simulation::one_walker(int index_particle, Eigen::Vector3d &position, Eigen::Vector3d &phase, double flag, double diffusion_time, double time_step, int seed) {
+    Eigen::VectorXd time = Eigen::VectorXd::LinSpaced((int)diffusion_time/time_step,0,diffusion_time);
+
+    for(int i=0; i<time.size(); i++){
+        
+
+    }
+}
+
+
 
 
 

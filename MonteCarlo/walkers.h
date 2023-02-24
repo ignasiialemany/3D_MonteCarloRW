@@ -13,13 +13,18 @@ public:
 
     walkers(int N_p, int seed, const std::string &stepType); //Construtor definition
 
-    std::set<unsigned int> get_seed_set();
+    Eigen::VectorXd get_seeds(){return seeds;};
     void init_positions(Eigen::MatrixXd &pos);
-    void set_position(Eigen::VectorXd &pos , int index);
-    Eigen::VectorXd get_position(int index) {return positions(index,Eigen::all).transpose();};
+    void set_position(Eigen::Vector3d &pos , int index);
+    //TODO might be delete flags
+    double get_flag(int index) {return flag(index);};
+    int get_seed(int index){return seeds(index);};
+    Eigen::Vector3d get_position(int index) {return positions(index,Eigen::all).transpose();};
+    Eigen::Vector3d get_phase(int index) {return phase(index,Eigen::all).transpose();};
     Eigen::MatrixXd get_positions(){return positions;};
+    Eigen::MatrixXd get_phases(){return phase;};
     [[nodiscard]] int get_Np() const {return N_p;};
-    [[nodiscard]] int get_seed() const {return rng_seed;};
+    [[nodiscard]] int get_global_seed() const {return rng_seed;};
 
 private:
     int N_p; //Number of particles
@@ -29,7 +34,9 @@ private:
     std::set<unsigned int> seed_set;
     Eigen::MatrixXd positions; //Positions
     Eigen::MatrixXd phase; //Phase
-    Eigen::MatrixXd flag; //Flags
+    //TODO might be delete flags
+    Eigen::VectorXd flag; //Flags
+    Eigen::VectorXd seeds;
 
 
     void generate_unique_seeds();

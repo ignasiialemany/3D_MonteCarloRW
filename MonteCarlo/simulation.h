@@ -36,7 +36,8 @@ public:
 private:
     walkers _particles;
     static std::variant<bool,std::runtime_error> checkBoundingBox(const Eigen::VectorXd &box);
-    //static void onewalker(VectorXd position,double diffusion_time, double time_step);
+    static void one_walker(int index_particle, Eigen::Vector3d &position, Eigen::Vector3d &phase, double flag, double diffusion_time, double time_step, int seed);
+    void one_dt(Eigen::Vector3d &position, double time_step, int index);
     void seeding(const Eigen::VectorXd &box);
 
 };
