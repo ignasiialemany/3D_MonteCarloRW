@@ -66,7 +66,7 @@ void simulation::performScan(double diffusion_time, double time_step, int cores)
     {
         Eigen::Vector3d position_i;
         Eigen::Vector3d phase_i;
-        double flag_i;
+        int flag_i;
         int seed_i;
         #pragma omp for private(position_i)
         for (int i = 0; i < number_of_particles; i++) {
@@ -74,6 +74,7 @@ void simulation::performScan(double diffusion_time, double time_step, int cores)
             phase_i = _particles.get_phase(i);
             flag_i = _particles.get_flag(i);
             seed_i = _particles.get_seed(i);
+            //TODO: Walker should have sequence gradient and substrate geometry as well and not diffusion/time_step
             one_walker(i,position_i,phase_i,flag_i,diffusion_time,time_step, seed_i);
             this->_particles.set_position(position_i,i);
         }
@@ -81,13 +82,62 @@ void simulation::performScan(double diffusion_time, double time_step, int cores)
     #pragma omp barrier
 }
 
-void simulation::one_walker(int index_particle, Eigen::Vector3d &position, Eigen::Vector3d &phase, double flag, double diffusion_time, double time_step, int seed) {
+void simulation::one_walker(int index_particle, Eigen::Vector3d &position, Eigen::Vector3d &phase, int &flag, double diffusion_time, double time_step, int seed) {
+
+    //TODO: This will have to be replaced with sequence gradient/timing
     Eigen::VectorXd time = Eigen::VectorXd::LinSpaced((int)diffusion_time/time_step,0,diffusion_time);
+    std::mt19937 rng_engine(seed);
 
     for(int i=0; i<time.size(); i++){
-        
 
+        int counter = 0;
+        bool step_success = false;
+        //While the particle has not stepped
+        while(!step_success){
+            try{
+
+                counter++;
+                if (counter > 50){
+                    std::cout << "Stepping has stopped. Particle flagged" << std::endl;
+                    flag=2;
+                    break;
+                }
+
+                //Eigen::VectorXd position_raw = one_dt(position, dt, substrate_input, myoindex, i_particle, i);
+                //position = position_raw({0,1,2});
+                //myoindex = position_raw(3);
+
+
+
+
+
+
+            }
+        }
     }
+}
+
+void
+simulation::one_dt(int index_particle, Eigen::Vector3d &position, Eigen::Vector3d &phase, int &flag, double time_step,
+                   std::mt19937 &rng_engine) {
+
+    Eigen::Vector3d step;
+    double D_coeff_old;
+    double D_coeff_new;
+
+    //TODO Implement function to get step based on stepType
+
+    //TODO Retrieve myoindex and choose Diffusivity coefficient to D_coeff_old
+
+    //TODO init loop till the step has finished. Do as many substeps as needed
+
+
+
+
+
+
+
+
 }
 
 

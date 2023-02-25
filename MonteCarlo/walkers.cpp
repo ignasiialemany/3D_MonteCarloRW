@@ -13,7 +13,7 @@ walkers::walkers(const int N_p, const int seed, const std::string &stepType) {
     generate_unique_seeds();
     positions = Eigen::MatrixXd::Zero(N_p, 3);
     phase = Eigen::MatrixXd::Zero(N_p, 3);
-    flag = Eigen::VectorXd::Zero(N_p);
+    flag = Eigen::VectorXd::Zero(N_p).cast<int>();
 }
 
 void walkers::generate_unique_seeds() {
