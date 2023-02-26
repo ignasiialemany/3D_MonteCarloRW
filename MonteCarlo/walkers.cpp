@@ -4,39 +4,25 @@
 
 #include "walkers.h"
 
-walkers::walkers(const int N_p, const int seed, const std::string &stepType) {
-    this->N_p = N_p;
-    this->rng_seed = seed;
-    this->stepType = stepType;
-
+walkers::walkers(const int Np, const int seed) {
+    _number_of_particles = Np;
+    _rng_seed = seed;
     //Generate unique seeds for each particle and init positions/phase/flags
     generate_unique_seeds();
-    positions = Eigen::MatrixXd::Zero(N_p, 3);
-    phase = Eigen::MatrixXd::Zero(N_p, 3);
-    flag = Eigen::VectorXd::Zero(N_p).cast<int>();
 }
 
 void walkers::generate_unique_seeds() {
     //Generate unique seeds for each particle using a RNG generator with the global seed
-    std::mt19937 gen(rng_seed);
+    std::mt19937 gen(_rng_seed);
     int counter = 0;
-    seeds = Eigen::VectorXd::Zero(N_p);
-    while(seed_set.size() < N_p){
+    while(_seed_set.size() < _number_of_particles){
         unsigned int seed = gen();
-        if (seed_set.find(seed) == seed_set.end()){
-            seeds(counter) = seed;
-            seed_set.insert(seed);
-            counter = counter + 1;
+        if (_seed_set.find(seed) == _seed_set.end()){
+            Particle& particle = get_particle(counter);
+            particle.seed = seed;
+            counter++;
         }
     }
-}
-
-void walkers::init_positions(Eigen::MatrixXd &pos) {
-    this->positions = pos;
-}
-
-void walkers::set_position(Eigen::Vector3d& pos, int index) {
-    this->positions(index,Eigen::all) = pos.transpose();
 }
 
 

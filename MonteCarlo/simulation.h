@@ -1,11 +1,21 @@
 #ifndef INC_3DRANDOMWALK_SIMULATION_H
 #define INC_3DRANDOMWALK_SIMULATION_H
 
-#include "walkers.h"
 #include <iostream>
 #include <variant>
 #include <stdexcept>
 #include <cstdlib>
+#include "../MRI/sequence.h"
+#include "walkers.h"
+#include "../Substrate/substrate.h"
+
+struct parameters{
+    int cores;
+    int dimension;
+    std::string step_type;
+    double D_ecs;
+    double D_ics;
+};
 
 class simulation {
 
@@ -27,19 +37,20 @@ public:
         return *this;
     }
 
-
     bool seedParticlesInBox(const Eigen::VectorXd &boundingbox);
     Eigen::MatrixXd getPositions(){return _particles.get_positions();};
-    void performScan(double diffusion_time, double time_step, int cores);
-
+    void performScan(const substrate &substrate, const sequence &sequence);
+    void set_parameters(int cores, int dimension, std::string &step_type);
 
 private:
     walkers _particles;
+    parameters _params;
     static std::variant<bool,std::runtime_error> checkBoundingBox(const Eigen::VectorXd &box);
-    static void one_walker(int index_particle, Eigen::Vector3d &position, Eigen::Vector3d &phase, int &flag, double diffusion_time, double time_step, int seed);
-    static void one_dt(int index_particle, Eigen::Vector3d &position, Eigen::Vector3d &phase, int &flag, double time_step, std::mt19937 &rng_engine);
+    void one_walker(Particle &particle, const substrate &substrate, const sequence &sequence);
+    void one_dt(Particle &particle, const substrate &substrate, const sequence &sequence, std::mt19937 &rng_engine, std::pair<double,double> &step_magnitude);
     void seeding(const Eigen::VectorXd &box);
-
+    static Eigen::Vector3d getStep(std::mt19937 &rng_engine, int dimension, std::string step_type);
+    double max_step=5;
 };
 
 
