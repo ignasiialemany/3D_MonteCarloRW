@@ -60,7 +60,6 @@ void simulation::performScan(const substrate &substrate, const sequence &sequenc
 #pragma omp for
         for (int index_particle = 0; index_particle < _particles.get_number_of_particles(); index_particle++) {
             Particle& particle = _particles.get_particle(index_particle);
-            //TODO: Walker should have sequence gradient and substrate geometry as well and not diffusion/time_step
             one_walker(particle,substrate, sequence);
         }
     }
@@ -82,6 +81,7 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
                 if (counter > 50) {
                     std::cout << "Stepping has stopped. Particle flagged" << std::endl;
                     particle.flag = 2;
+                    //TODO: Throw error
                     break;
                 }
                 //Update position
@@ -102,7 +102,7 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
 }
 
 void simulation::one_dt( Particle &particle, const substrate &substrate, const sequence &sequence, std::mt19937 &rng_engine, std::pair<double,double> &step_magnitude) {
-    Eigen::Vector3d step = getStep(rng_engine,_params.dimension,_params.step_type);
+    Eigen::Vector3d step = simulation::getStep(rng_engine,_params.dimension,_params.step_type);
     double dt_magnitude = step_magnitude.first;
     double dG_magnitude = step_magnitude.second;
     double D_coeff_old;

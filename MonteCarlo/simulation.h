@@ -33,12 +33,12 @@ public:
         if (this != &other) {
             // Copy all data members from the other object
             this->_particles = other._particles;
+            this->_params = other._params;
         }
         return *this;
     }
-
     bool seedParticlesInBox(const Eigen::VectorXd &boundingbox);
-    Eigen::MatrixXd getPositions(){return _particles.get_positions();};
+    walkers getParticles(){return _particles;};
     void performScan(const substrate &substrate, const sequence &sequence);
     void set_parameters(int cores, int dimension, std::string &step_type);
 
