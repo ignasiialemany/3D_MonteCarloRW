@@ -7,8 +7,8 @@
 
 #include <iostream>
 #include <vector>
-#include <Eigen/Dense>
 #include <yaml-cpp/yaml.h>
+#include <Eigen/Dense>
 
 struct sequence_parameters{
     std::string type;

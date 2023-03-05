@@ -4,60 +4,87 @@
 
 #include "utility.h"
 
-intersection_ray_info
-utility::rayIntersectsPolygon(const Eigen::Vector3d &point, const Eigen::Vector3d &direction, const Eigen::MatrixXd &V1,
-                              const Eigen::MatrixXd &V2, const Eigen::MatrixXd &V3) {
+std::vector<std::pair<int,double>> utility::rayIntersectsPolygon(const Eigen::Vector3d &point, const Eigen::Vector3d &direction, const Eigen::MatrixXd &V1, const Eigen::MatrixXd &V2,const Eigen::MatrixXd &V3) {
+    
+    const double EPSILON = 1e-10;
+    const int num_faces = V1.rows();
+    const double step_length = direction.norm();
 
-    //Intersection is computed using V1, V2 and V3
-    intersection_ray_info output;
-    int Nverts = V1.rows();
-    Eigen::MatrixXd orig = Eigen::MatrixXd::Ones(Nverts, 3).array().rowwise() * point.transpose().array();
-    Eigen::MatrixXd dir = Eigen::MatrixXd::Ones(Nverts, 3).array().rowwise() * direction.transpose().array();
+    //Store the index and distance to face
+    std::vector<std::pair<int, double>> distance_to_face;
 
-    // tolerances
-    double eps = 1e-20;
-    double zero = 0.0;
+    for (int i = 0; i < num_faces; i++) {
 
-    output.intersect.resize(Nverts, 1);
-    output.intersect.fill(false);
-    // output.intersect = Eigen::VectorXd::Zero(Nverts);
-    output.t = Eigen::VectorXd::Ones(Nverts) * -1; // infinite is replaced by -1 in matlab
-    output.u = Eigen::VectorXd::Ones(Nverts) * -1;
-    output.v = Eigen::VectorXd::Ones(Nverts) * -1;
+        Eigen::Vector3d edge1 = V2.row(i) - V1.row(i);
+        Eigen::Vector3d edge2 = V3.row(i) - V1.row(i);
+        Eigen::Vector3d tvec = point - V1.row(i).transpose();
+        Eigen::Vector3d pvec = direction.cross(edge2);
+        double det = edge1.dot(pvec);
 
-    // some pre-calculations
-    Eigen::MatrixXd edge1 = V2 - V1; // find vectors for two edges sharing V1
-    Eigen::MatrixXd edge2 = V3 - V1;
-    Eigen::MatrixXd tvec = orig - V1; // vector from V1 to ray origin
+        //Checks that ray is not in face
+        if (abs(det) <= EPSILON){
+            continue;
+        }
 
-    Eigen::MatrixXd pvec = crossMat(dir, edge2);
-    Eigen::MatrixXd qvec = crossMat(tvec, edge1);
-    Eigen::VectorXd det = (edge1.array() *
-                           pvec.array()).rowwise().sum(); // determinant of the matrix M = dot(edge1, pvec)
+        Eigen::Vector3d qvec = tvec.cross(edge1);
+        double u = tvec.dot(pvec)/det;
+        double v = direction.dot(qvec)/det;
+        double w = 1 - u - v; 
+        double t = edge2.dot(qvec)/det;
+        double t2 = edge1.dot(qvec)/det;
 
-    // find faces parallel to the ray
-    // Eigen::Array<bool, Eigen::Dynamic, 1> angleOK = (det.array().abs2() > eps).array(); // if det ~ 0 then ray lies in the triangle plane
-    Eigen::Array<bool, Eigen::Dynamic, 1> angleOK = (det.array().abs() >
-                                                     eps).array(); // if det ~ 0 then ray lies in the triangle plane
-
-    if ((angleOK == false).all()) {
-        printf("polygon::TriangleRayIntersection::angle not within tolerance\n");
-        return output;
+        //If face is too close to an edge or out of the face
+        if (u < EPSILON || u > 1 - EPSILON || v < EPSILON || v > 1 - EPSILON || w < EPSILON || w > 1 - EPSILON){
+            continue;
+        }
+        
+        //If the distance is too close or the remaining step is too short
+        if (t < EPSILON || t > 1 - EPSILON){
+            continue;
+        }
+        
+        distance_to_face.emplace_back(i, t*step_length);
     }
-    // To do : change to avoid division by zero
+    return distance_to_face;
+}
 
-    // calculate all variables for all line/triangle pairs
-    output.u = (tvec.array() * pvec.array()).rowwise().sum().array() / det.array();
-    output.v = (dir.array() * qvec.array()).rowwise().sum().array() / det.array();
-    output.t = (edge2.array() * qvec.array()).rowwise().sum().array() / det.array();
 
-    // test if line/plane intersection is within the triangle
-    Eigen::Array<bool, Eigen::Dynamic, 1> ok = (angleOK and (output.u.array() >= -zero).array() and
-                                                (output.v.array() >= -zero).array() and
-                                                ((output.u + output.v).array() <= 1.0 + zero).array());
-    // std::cout << ok.cast<double>().sum() << std::endl;
-    output.intersect = (ok and (output.t.array() >= -zero).array() and (output.t.array() <= 1.0 + zero).array());
+std::pair<int,double> utility::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &direction, const Eigen::MatrixXd &V1, const Eigen::MatrixXd &V2, const Eigen::MatrixXd &V3) {
+    //returns a vector of pairs containing the face index and distance to membrane
+    std::vector<std::pair<int,double>> info = utility::rayIntersectsPolygon(point,direction,V1,V2,V3);
+    if (info.size()==0){
+        //TODO: see if we can handle this with error after
+        return std::make_pair(-1,-1);
+    }
+    double min_distance_to_face = info[0].second;
+    int face_index = info[0].first;
+    if (info.size() > 1){
+        //Do this check and for now just output the error
+        std::cout << "Multiple faces are intersecting?" << std::endl;
 
+        //For now compute the smallest distance_to_face but let's see if this error shows up a lot
+        for (auto & it : info) {
+            if (it.second < min_distance_to_face) {
+                min_distance_to_face = it.second;
+                face_index = it.first;
+            }
+        }
+    }
+
+    return std::make_pair(face_index+1,min_distance_to_face);
+}
+
+
+
+Eigen::MatrixXd utility::getOrderedVertices(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces, int index) {
+    Eigen::MatrixXd output = vertices(faces(Eigen::all, index).array() - 1, Eigen::all);
     return output;
 }
 
+Eigen::MatrixXd utility::crossMat(Eigen::MatrixXd &a, Eigen::MatrixXd &b) {
+    Eigen::MatrixXd output = Eigen::MatrixXd::Zero(a.rows(), 3);
+    for (int i = 0; i < a.rows(); i++){
+        output(i, {0, 1, 2}) = a(i, {0, 1, 2}).cross(b(i, {0, 1, 2}));
+    }
+    return output;
+}

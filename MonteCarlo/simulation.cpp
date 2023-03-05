@@ -130,12 +130,6 @@ void simulation::one_dt( Particle &particle, const substrate &substrate, const s
             //TODO: rotate step
             //TODO: check intersection
 
-            if (!intersectInfo.empty) {
-                next_position = position + step;
-
-
-            }
-
 
         }
 
@@ -159,6 +153,7 @@ Eigen::Vector3d simulation::getStep(std::mt19937 &rng_engine, int dimension, std
             {"normal",   1}
     };
     bool isValid = false;
+    double max_step = 5;
     std::uniform_int_distribution<int> uniform_dist(0, 1);
     std::normal_distribution<double> normal(0, 1);
     while (!isValid) {

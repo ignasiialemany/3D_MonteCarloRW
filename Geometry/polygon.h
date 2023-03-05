@@ -6,34 +6,36 @@
 #define INC_3DRANDOMWALK_POLYGON_H
 
 #include <Eigen/Dense>
+#include "boundingbox.h"
 #include "utility.h"
+#include <iostream>
 
 class polygon {
 
 public:
     polygon() = default;
 
-    polygon(Eigen::MatrixXd vertices_input, Eigen::MatrixXd faces_input);
+    polygon(const Eigen::MatrixXd &vertices_input, const Eigen::MatrixXd &faces_input);
     //polygon(std::string box_type, Eigen::MatrixXd bounding_box);
 
-    Eigen::MatrixXd vertices;
-    Eigen::MatrixXd faces;
+    double computeVolume();
+
+    double computeSurface();
+
+    std::pair<int,double> intersection(const Eigen::Vector3d &orig, const Eigen::Vector3d &dir);
+
+
+    double _volume=0;
+    double _surface=0;
     int n_vertices;
     int n_faces;
+    Eigen::MatrixXd vertices;
+    Eigen::MatrixXd faces;
+    boundingbox bounding_box;
+    Eigen::MatrixXd V1;
+    Eigen::MatrixXd V2;
+    Eigen::MatrixXd V3;
 
-    static double computeVolume(Eigen::MatrixXd &vertices_input, Eigen::MatrixXd &faces_input);
-
-    static double computeSurface(Eigen::MatrixXd &vertices_input, Eigen::MatrixXd &faces_input);
-
-    void intersection(Eigen::Vector3d &orig, Eigen::Vector3d &dir);
-
-
-private:
-
-    Eigen::MatrixXd getOrderedVertices(int column);
-
-    double _volume;
-    double _surface;
 };
 
 

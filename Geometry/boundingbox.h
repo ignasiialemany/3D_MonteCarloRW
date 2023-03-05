@@ -18,9 +18,9 @@ public:
 
     void initialize(Eigen::VectorXd bb_range_input) {
         bb_range = bb_range_input;
-        DxDyDz << (bb_range(1) - bb_range(0)), (bb_range(3) - bb_range(2)), (bb_range(5) - bb_range(4));
+        DxDyDz << (bb_range(3) - bb_range(0)), (bb_range(4) - bb_range(1)), (bb_range(5) - bb_range(2));
         // Computing bounding box property
-        if (DxDyDz(0) > 0 and DxDyDz(0) > 0 and DxDyDz(0) > 0) { // Check if any length is negative
+        if (DxDyDz(0) > 0 and DxDyDz(1) > 0 and DxDyDz(2) > 0) { // Check if any length is negative
             bb_volume = boundingbox::bounding_box_volume(DxDyDz);
             bb_surface_area = boundingbox::bounding_box_surface(DxDyDz);
         } else {

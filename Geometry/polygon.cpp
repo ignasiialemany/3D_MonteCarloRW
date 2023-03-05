@@ -4,67 +4,87 @@
 
 #include "polygon.h"
 
-polygon::polygon(Eigen::MatrixXd vertices_input, Eigen::MatrixXd faces_input) {
-    // Assigning vertices and faces
-    vertices = vertices_input;
-    faces = faces_input;
-
-    // Number of faces and vertices
-    n_vertices = vertices_input.rows();
-    n_faces = faces_input.rows();
-
-    _volume = polygon::computeVolume(vertices_input, faces_input);
-    _surface = polygon::computeSurface(vertices_input, faces_input);
+polygon::polygon(const Eigen::MatrixXd &vertices_input, const Eigen::MatrixXd &faces_input) : vertices(vertices_input),
+                                                                                faces(faces_input),
+                                                                                n_vertices(vertices_input.rows()),
+                                                                                n_faces(faces_input.rows()),
+                                                                                V1(utility::getOrderedVertices(
+                                                                                        vertices_input, faces_input,
+                                                                                        0)),
+                                                                                V2(utility::getOrderedVertices(
+                                                                                        vertices_input, faces_input,
+                                                                                        1)),
+                                                                                V3(utility::getOrderedVertices(
+                                                                                        vertices_input, faces_input,
+                                                                                        2)) {
 
     // Computing the bounding box range
-    bb_range.resize(6);
-    minXYZ << vertices_input(Eigen::all, 0).minCoeff(), vertices_input(Eigen::all, 1).minCoeff(), vertices_input(
-            Eigen::all, 2).minCoeff();
-    maxXYZ << vertices_input(Eigen::all, 0).maxCoeff(), vertices_input(Eigen::all, 1).maxCoeff(), vertices_input(
-            Eigen::all, 2).maxCoeff();
-    bb_range << minXYZ(0), maxXYZ(0), minXYZ(1), maxXYZ(1), minXYZ(2), maxXYZ(2);
+    Eigen::VectorXd bb_range(6);
 
-    boundingbox.initialize(bb_range);
+    Eigen::VectorXd minXYZ(3);
+    minXYZ << vertices_input.col(0).minCoeff(), vertices_input.col(1).minCoeff(), vertices_input.col(2).minCoeff();
+
+    Eigen::VectorXd maxXYZ(3);
+    maxXYZ << vertices_input.col(0).maxCoeff(), vertices_input.col(1).maxCoeff(), vertices_input.col(2).maxCoeff();
+
+    bb_range << minXYZ, maxXYZ;
+
+    std::cout << bb_range << std::endl;
+    //Init bounding box
+    bounding_box.initialize(bb_range);
 }
 
-double polygon::computeVolume(Eigen::MatrixXd &vertices_input, Eigen::MatrixXd &faces_input) {
-    double volume = 0.0;
-    Eigen::Vector3d centroid = vertices_input.colwise().mean();
-    for (int i = 0; i < faces_input.rows(); i++) {
-        // Extract the vertices of the face
-        Eigen::Vector3d v1 = vertices_input.row(faces_input(i, 0)).transpose();
-        Eigen::Vector3d v2 = vertices_input.row(faces_input(i, 1)).transpose();
-        Eigen::Vector3d v3 = vertices_input.row(faces_input(i, 2)).transpose();
+double polygon::computeVolume() {
+    if (!_volume) {
+        double volume = 0.0;
+        const Eigen::Vector3d centroid = vertices.colwise().mean();
+        for (int i = 0; i < faces.rows(); i++) {
+            
+            // Extract the vertices of the face
+            Eigen::Vector3d v1 = vertices.row(faces(i, 0)-1).transpose();
+            Eigen::Vector3d v2 = vertices.row(faces(i, 1)-1).transpose();
+            Eigen::Vector3d v3 = vertices.row(faces(i, 2)-1).transpose();
 
-        // Compute the volume of the pyramid formed by the face and the centroid
-        double pyramid_volume = fabs((v2 - v1).cross(v3 - v1).dot(centroid - v1)) / 6.0;
+            // Compute the volume of the pyramid formed by the face and the centroid
+            double pyramid_volume = fabs((v2 - v1).cross(v3 - v1).dot(centroid - v1)) / 6.0;
 
-        // Add the volume of the pyramid to the total volume
-        volume += pyramid_volume;
+            // Add the volume of the pyramid to the total volume
+            volume += pyramid_volume;
+        }
+        _volume = volume;
+        return volume;
+    } else {
+        return _volume;
     }
-    return volume;
+
 }
 
-double polygon::computeSurface(Eigen::MatrixXd &vertices_input, Eigen::MatrixXd &faces_input) {
-    double surface = 0.0;
-    for (int i = 0; i < faces_input.rows(); i++) {
-        // Extract the vertices of the face
-        Eigen::Vector3d v1 = vertices_input.row(faces_input(i, 0)).transpose();
-        Eigen::Vector3d v2 = vertices_input.row(faces_input(i, 1)).transpose();
-        Eigen::Vector3d v3 = vertices_input.row(faces_input(i, 2)).transpose();
+double polygon::computeSurface() {
+    if (!_surface) {
+        double surface = 0.0;
+        for (int i = 0; i < faces.rows(); i++) {
+            // Extract the vertices of the face
+            Eigen::Vector3d v1 = vertices.row(faces(i, 0)-1).transpose();
+            Eigen::Vector3d v2 = vertices.row(faces(i, 1)-1).transpose();
+            Eigen::Vector3d v3 = vertices.row(faces(i, 2)-1).transpose();
 
-        double face_area = 0.5 * (v2 - v1).cross(v3 - v1).norm();
+            double face_area = 0.5 * (v2 - v1).cross(v3 - v1).norm();
 
-        // Add the volume of the pyramid to the total volume
-        surface += face_area;
+            // Add the volume of the pyramid to the total surface
+            surface += face_area;
+        }
+        _surface = surface;
+        return surface;
+    } else {
+        return _surface;
     }
-    return surface;
 }
 
-Eigen::MatrixXd polygon::getOrderedVertices(int column) {
-    return vertices(faces(Eigen::all, column).array() - 1, Eigen::all);
-}
-
-void polygon::intersection(Eigen::Vector3d &orig, Eigen::Vector3d &dir) {
-
+std::pair<int, double> polygon::intersection(const Eigen::Vector3d &orig, const Eigen::Vector3d &dir) {
+    if (V1.isZero()) {
+        std::cout << "Polygon not initialized properly" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    std::pair<int, double> intersection_info = utility::intersection(orig, dir, V1, V2, V3);
+    return intersection_info;
 }

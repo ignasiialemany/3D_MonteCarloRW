@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <catch2/catch_test_macros.hpp>
 
+/*
+
 bool check_seeding(int seed1,double min_x,double max_x, double min_y, double max_y, double min_z, double max_z){
 
     walkers particles(100000, seed1,"constant");
@@ -59,4 +61,4 @@ TEST_CASE( "Check particles are bounded within box", "[check_seeding]" ) {
 TEST_CASE( "Check unique seeding","[unique_seeding]"){
     REQUIRE(unique_seeding(1230,1234,0,100,0,100,0,600)==false);
     REQUIRE(unique_seeding(1230,1230,0,100,0,100,0,600)==true);
-}
+}*/

@@ -7,18 +7,19 @@
 
 #include<Eigen/Dense>
 #include<cmath>
-
-struct intersection_ray_info {
-    Eigen::VectorXd t, u, v;
-    Eigen::Array<bool, Eigen::Dynamic, 1> intersect;
-};
+#include<iostream>
 
 class utility {
 
 public:
-    Eigen::Array<bool, Eigen::Dynamic, 1>
-    rayIntersectsPolygon(const Eigen::Vector3d &point, const Eigen::Vector3d &direction, const Eigen::MatrixXd &V1,
-                         const Eigen::MatrixXd &V2, const Eigen::MatrixXd &V3);
+
+    static std::vector<std::pair<int,double>> rayIntersectsPolygon(const Eigen::Vector3d &point, const Eigen::Vector3d &direction, const Eigen::MatrixXd &V1, const Eigen::MatrixXd &V2,const Eigen::MatrixXd &V3);
+
+    static std::pair<int,double> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &direction, const Eigen::MatrixXd &V1, const Eigen::MatrixXd &V2, const Eigen::MatrixXd &V3);
+
+    static Eigen::MatrixXd getOrderedVertices(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &column, int index);
+
+    static Eigen::MatrixXd crossMat(Eigen::MatrixXd &a, Eigen::MatrixXd &b);
 
 };
 
