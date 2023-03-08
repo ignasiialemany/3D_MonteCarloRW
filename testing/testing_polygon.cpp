@@ -4,10 +4,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "../Geometry/polygon.h"
-#include <Eigen/Dense>
+#include <matioCpp/matioCpp.h>
 
-TEST_CASE("Compute volume and surface of a polygon", "[polygon]")
+TEST_CASE("Compute surface of polygon", "[polygon]")
 {
+
     // Define vertices and faces of a tetrahedron
     Eigen::MatrixXd vertices(4, 3);
     Eigen::MatrixXd faces(4, 3);
@@ -66,6 +67,33 @@ TEST_CASE("Compute volume and surface area of a regular tetrahedron", "[polygon]
         double computed_surface = poly.computeSurface();
         REQUIRE(std::abs(computed_surface - expected_surface) < 1e-6);
     }
+
+    SECTION("Check if polyhedron contains a point")
+    {
+        Eigen::Vector3d point_inside(0.25, 0.25, 0.25);
+        Eigen::Vector3d point_outside(2, 2, 2);
+
+        REQUIRE(poly.containsPoint(point_inside) == true);
+        REQUIRE(poly.containsPoint(point_outside) == false);
+    }
+
+    SECTION("Check if polyhedron contains a point")
+    {
+        // Check point containment
+        Eigen::Vector3d inside_point(0.2, 0.2, 0.2);
+        Eigen::Vector3d outside_point(2, 2, 2);
+        Eigen::Vector3d on_face_point(0.5, std::sqrt(3) / 6, std::sqrt(6) / 6);
+        Eigen::Vector3d on_vertex_point(1, 0, 0);
+        Eigen::Vector3d on_edge_point(0.25, 0, 0);
+        Eigen::Vector3d outside_eps(0.8, 0.05, -1e-8);
+
+        REQUIRE(poly.containsPoint(inside_point) == true);
+        REQUIRE(poly.containsPoint(outside_point) == false);
+        REQUIRE(poly.containsPoint(on_face_point) == true);
+        REQUIRE(poly.containsPoint(on_vertex_point) == true);
+        REQUIRE(poly.containsPoint(on_edge_point) == true);
+        REQUIRE(poly.containsPoint(outside_eps) == false);
+    }
 }
 
 TEST_CASE("Test intersection of point and step with polygon face that is too close to an edge", "[polygon]")
@@ -88,10 +116,12 @@ TEST_CASE("Test intersection of point and step with polygon face that is too clo
     Eigen::Vector3d step(0, 0, 1);
 
     // Check if the point and step intersect with any face
-    std::pair<int, double> intersection_info = poly.intersection(point, step);
+    boost::variant<bool, std::pair<int, double>> intersection_info = poly.intersection(point, step);
 
-    // Check that there is no intersection
-    REQUIRE(intersection_info.second == -1);
+    bool is_variant_bool = intersection_info.which() == 0;
+    bool variant_bool_value = boost::get<bool>(intersection_info);
+    REQUIRE(is_variant_bool);
+    REQUIRE(variant_bool_value == false);
 }
 
 TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
@@ -114,12 +144,19 @@ TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
     Eigen::Vector3d step(0, 0, 1);
 
     // Check if the point and step intersect with the fourth face
-    std::pair<int, double> intersection_info = poly.intersection(point, step);
+    boost::variant<bool, std::pair<int, double>> intersection_info = poly.intersection(point, step);
 
     // The expected intersection info is that the point and step intersect with the fourth face
     std::pair<int, double> expected_intersection_info(4, 0.6);
 
-    // Check that the computed intersection info matches the expected intersection info
-    REQUIRE(intersection_info.first == expected_intersection_info.first);
-    REQUIRE(std::abs(intersection_info.second - expected_intersection_info.second) < 1e-6);
+    bool is_variant_bool = intersection_info.which() == 1;
+    std::pair<int, double> variant = boost::get<std::pair<int, double>>(intersection_info);
+    REQUIRE(is_variant_bool);
+    REQUIRE(variant.first == expected_intersection_info.first);
+    REQUIRE(variant.second == expected_intersection_info.second);
+}
+
+TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
+{
+    //matioCpp::File file("data.mat");
 }

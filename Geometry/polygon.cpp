@@ -48,12 +48,28 @@ polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
     B.end_surface();
 }
 
+double polygon::computeVolume(){
+    double volume=0;
+
+    Polyhedron::Point_3 centroid = CGAL::centroid(_vertices.begin(), _vertices.end());
+    // Compute the volume of each tetrahedron and add it to the volume
+    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
+    {
+        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
+        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
+
+        //Compute the pyramid volume of p1,p2,p3,centroid
+        volume += CGAL::abs(CGAL::volume(p1, p2, p3, centroid));
+    }
+    return volume;
+}
+
+
 double polygon::computeSurface()
 {
     double surface_area = 0;
-
-    // Triangulate the faces of the polyhedron
-    CGAL::Polygon_mesh_processing::triangulate_faces(_poly);
 
     // Compute the area of each triangle and add it to the surface area
     for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)

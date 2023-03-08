@@ -1,0 +1,183 @@
+{
+	"artifacts" : 
+	[
+		{
+			"path" : "third_party/Catch2-3.3.1/src/libCatch2Maind.dylib"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"target_link_libraries",
+			"target_compile_options",
+			"add_cxx_flag_if_supported_to_targets",
+			"add_build_reproducibility_settings"
+		],
+		"files" : 
+		[
+			"third_party/Catch2-3.3.1/src/CMakeLists.txt",
+			"third_party/Catch2-3.3.1/CMake/CatchMiscFunctions.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 387,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 392,
+				"parent" : 0
+			},
+			{
+				"command" : 4,
+				"file" : 0,
+				"line" : 390,
+				"parent" : 0
+			},
+			{
+				"command" : 3,
+				"file" : 1,
+				"line" : 118,
+				"parent" : 3
+			},
+			{
+				"command" : 2,
+				"file" : 1,
+				"line" : 16,
+				"parent" : 4
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : " -g -g -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX12.3.sdk -fPIC"
+				},
+				{
+					"backtrace" : 5,
+					"fragment" : "-ffile-prefix-map=/Users/ia4118/CLionProjects/3D_RandomWalk/third_party/Catch2-3.3.1/="
+				},
+				{
+					"fragment" : "-std=gnu++14"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"define" : "Catch2WithMain_EXPORTS"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 2,
+					"path" : "/Users/ia4118/CLionProjects/3D_RandomWalk/third_party/Catch2-3.3.1/src/catch2/.."
+				},
+				{
+					"backtrace" : 2,
+					"path" : "/Users/ia4118/CLionProjects/3D_RandomWalk/build/third_party/Catch2-3.3.1/generated-includes"
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2,
+					2
+				],
+				"standard" : "14"
+			},
+			"sourceIndexes" : 
+			[
+				0
+			]
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 2,
+			"id" : "Catch2::@91b32280fe75a49479a0"
+		}
+	],
+	"id" : "Catch2WithMain::@91b32280fe75a49479a0",
+	"link" : 
+	{
+		"commandFragments" : 
+		[
+			{
+				"fragment" : "",
+				"role" : "flags"
+			},
+			{
+				"fragment" : "-Wl,-rpath,/Users/ia4118/CLionProjects/3D_RandomWalk/build/third_party/Catch2-3.3.1/src",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "libCatch2d.3.3.1.dylib",
+				"role" : "libraries"
+			}
+		],
+		"language" : "CXX"
+	},
+	"name" : "Catch2WithMain",
+	"nameOnDisk" : "libCatch2Maind.dylib",
+	"paths" : 
+	{
+		"build" : "third_party/Catch2-3.3.1/src",
+		"source" : "third_party/Catch2-3.3.1/src"
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "third_party/Catch2-3.3.1/src/catch2/internal/catch_main.cpp",
+			"sourceGroupIndex" : 0
+		}
+	],
+	"type" : "SHARED_LIBRARY"
+}

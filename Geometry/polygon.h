@@ -10,19 +10,24 @@
 #include <CGAL/Polyhedron_3.h>
 #include <CGAL/Polygon_mesh_processing/triangulate_faces.h>
 #include <CGAL/Polygon_mesh_processing/orient_polygon_soup.h>
-#include <cassert>
-#include <vector>
 #include <CGAL/Ray_3.h>
 #include <CGAL/Triangle_3.h>
 #include <CGAL/Vector_3.h>
 #include <CGAL/intersection_3.h>
 #include <CGAL/Bbox_3.h>
+
+#include <Eigen/Dense>
+#include <cassert>
+#include <vector>
 #include <boost/optional.hpp>
 
 typedef CGAL::Simple_cartesian<double>     Kernel;
 typedef CGAL::Polyhedron_3<Kernel>         Polyhedron;
 typedef Polyhedron::HalfedgeDS             HalfedgeDS;
 typedef Kernel::Point_3                    Point_3;
+
+
+
 class polygon
 {
 public:
@@ -31,7 +36,7 @@ public:
 
     polygon(const Eigen::MatrixXd &vertices_input, const Eigen::MatrixXd &faces_input);
 
-    //double computeVolume();
+    double computeVolume();
     double computeSurface();
 
     boost::variant<bool,std::pair<int,double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);

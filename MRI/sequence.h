@@ -10,7 +10,8 @@
 #include <yaml-cpp/yaml.h>
 #include <Eigen/Dense>
 
-struct sequence_parameters{
+struct sequence_parameters
+{
     std::string type;
     double G_max;
     double Delta;
@@ -27,19 +28,23 @@ struct sequence_parameters{
     Eigen::MatrixXd gG;
 };
 
-class sequence {
+class sequence
+{
 public:
-    sequence(const std::string& filename) {
+    sequence(const std::string &filename)
+    {
         YAML::Node config = YAML::LoadFile(filename);
         parameters.type = config["sequence"]["type"].as<std::string>();
         parameters.G_max = config["sequence"][parameters.type]["G"].as<double>();
         parameters.Delta = config["sequence"][parameters.type]["Delta"].as<double>();
         parameters.epsilon = config["sequence"][parameters.type]["epsilon"].as<double>();
-        if (parameters.type=="MCSE"){
+        if (parameters.type == "MCSE")
+        {
             parameters.delta = config["sequence"][parameters.type]["delta1"].as<double>();
             parameters.delta2 = config["sequence"][parameters.type]["delta2"].as<double>();
         }
-        else{
+        else
+        {
             parameters.delta = config["sequence"][parameters.type]["delta"].as<double>();
         }
         parameters.alpha90 = config["sequence"][parameters.type]["alpha90"].as<double>();
@@ -52,7 +57,6 @@ public:
     sequence_parameters parameters;
     void create();
     void discretize(Eigen::VectorXd durations, Eigen::VectorXd ids);
-
 };
 
-#endif //INC_3DRANDOMWALK_SEQUENCE_H
+#endif // INC_3DRANDOMWALK_SEQUENCE_H
