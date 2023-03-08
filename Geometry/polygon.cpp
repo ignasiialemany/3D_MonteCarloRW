@@ -4,87 +4,186 @@
 
 #include "polygon.h"
 
-polygon::polygon(const Eigen::MatrixXd &vertices_input, const Eigen::MatrixXd &faces_input) : vertices(vertices_input),
-                                                                                faces(faces_input),
-                                                                                n_vertices(vertices_input.rows()),
-                                                                                n_faces(faces_input.rows()),
-                                                                                V1(utility::getOrderedVertices(
-                                                                                        vertices_input, faces_input,
-                                                                                        0)),
-                                                                                V2(utility::getOrderedVertices(
-                                                                                        vertices_input, faces_input,
-                                                                                        1)),
-                                                                                V3(utility::getOrderedVertices(
-                                                                                        vertices_input, faces_input,
-                                                                                        2)) {
+polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
+{
+    // Create a bounding box from min max vertices
 
-    // Computing the bounding box range
-    Eigen::VectorXd bb_range(6);
+    for (int i = 0; i < vertices.rows(); i++)
+    {
+        _vertices.push_back(Point_3(vertices(i, 0), vertices(i, 1), vertices(i, 2)));
+    }
 
-    Eigen::VectorXd minXYZ(3);
-    minXYZ << vertices_input.col(0).minCoeff(), vertices_input.col(1).minCoeff(), vertices_input.col(2).minCoeff();
+    _bbox = CGAL::bbox_3(_vertices.begin(), _vertices.end());
 
-    Eigen::VectorXd maxXYZ(3);
-    maxXYZ << vertices_input.col(0).maxCoeff(), vertices_input.col(1).maxCoeff(), vertices_input.col(2).maxCoeff();
-
-    bb_range << minXYZ, maxXYZ;
-
-    std::cout << bb_range << std::endl;
-    //Init bounding box
-    bounding_box.initialize(bb_range);
-}
-
-double polygon::computeVolume() {
-    if (!_volume) {
-        double volume = 0.0;
-        const Eigen::Vector3d centroid = vertices.colwise().mean();
-        for (int i = 0; i < faces.rows(); i++) {
-            
-            // Extract the vertices of the face
-            Eigen::Vector3d v1 = vertices.row(faces(i, 0)-1).transpose();
-            Eigen::Vector3d v2 = vertices.row(faces(i, 1)-1).transpose();
-            Eigen::Vector3d v3 = vertices.row(faces(i, 2)-1).transpose();
-
-            // Compute the volume of the pyramid formed by the face and the centroid
-            double pyramid_volume = fabs((v2 - v1).cross(v3 - v1).dot(centroid - v1)) / 6.0;
-
-            // Add the volume of the pyramid to the total volume
-            volume += pyramid_volume;
+    for (int i = 0; i < faces.rows(); i++)
+    {
+        std::vector<std::size_t> face_input;
+        for (int j = 0; j < 3; j++)
+        {
+            face_input.push_back(faces(i, j) - 1);
         }
-        _volume = volume;
-        return volume;
-    } else {
-        return _volume;
+        _faces.push_back(face_input);
+    }
+    // Postcondition: hds is a valid polyhedral surface.
+    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> B(_poly.hds(), true);
+    B.begin_surface(_vertices.size(), _faces.size());
+
+    // Add vertices
+    for (const auto &point : _vertices)
+    {
+        B.add_vertex(point);
     }
 
-}
-
-double polygon::computeSurface() {
-    if (!_surface) {
-        double surface = 0.0;
-        for (int i = 0; i < faces.rows(); i++) {
-            // Extract the vertices of the face
-            Eigen::Vector3d v1 = vertices.row(faces(i, 0)-1).transpose();
-            Eigen::Vector3d v2 = vertices.row(faces(i, 1)-1).transpose();
-            Eigen::Vector3d v3 = vertices.row(faces(i, 2)-1).transpose();
-
-            double face_area = 0.5 * (v2 - v1).cross(v3 - v1).norm();
-
-            // Add the volume of the pyramid to the total surface
-            surface += face_area;
+    // Add faces
+    for (const auto &face : _faces)
+    {
+        B.begin_facet();
+        for (const auto &index : face)
+        {
+            B.add_vertex_to_facet(index);
         }
-        _surface = surface;
-        return surface;
-    } else {
-        return _surface;
+        B.end_facet();
     }
+
+    B.end_surface();
 }
 
-std::pair<int, double> polygon::intersection(const Eigen::Vector3d &orig, const Eigen::Vector3d &dir) {
-    if (V1.isZero()) {
-        std::cout << "Polygon not initialized properly" << std::endl;
-        exit(EXIT_FAILURE);
+double polygon::computeSurface()
+{
+    double surface_area = 0;
+
+    // Triangulate the faces of the polyhedron
+    CGAL::Polygon_mesh_processing::triangulate_faces(_poly);
+
+    // Compute the area of each triangle and add it to the surface area
+    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
+    {
+        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
+        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
+
+        surface_area += CGAL::sqrt(CGAL::squared_area(p1, p2, p3));
     }
-    std::pair<int, double> intersection_info = utility::intersection(orig, dir, V1, V2, V3);
-    return intersection_info;
+    return surface_area;
+}
+
+boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step)
+{
+    // Define a segment that starts at point and finishes at step+point;
+    CGAL::Segment_3<Kernel> segment(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Point_3(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
+
+    double min_distance = std::numeric_limits<double>::max();
+    int min_index = -1;
+    int n_intersections = 0;
+
+    // Check if the segment intersects any of the faces
+    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
+    {
+        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
+        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
+        CGAL::Triangle_3<Kernel> triangle(p1, p2, p3);
+        boost::optional<boost::variant<CGAL::Point_3<Kernel>, CGAL::Segment_3<Kernel>>> intersection = CGAL::intersection(segment, triangle);
+
+        // If init point is right at the face
+        if (triangle.has_on(segment.source()))
+        {
+            continue;
+        }
+
+        // Check if intersection is type Segment_3 (is intersecting with edge) and return false as intersection is not certain
+        if (intersection && intersection->which() == 1)
+        {
+            return false;
+        }
+
+        // Check if intersection is type Point_3 and update min_distance and min_index
+        if (intersection && intersection->which() == 0)
+        {
+            n_intersections++;
+            CGAL::Point_3<Kernel> intersection_point;
+            if (CGAL::assign(intersection_point, *intersection))
+            {
+                double distance = CGAL::sqrt(CGAL::squared_distance(intersection_point, segment.source()));
+
+                // If the distance is 0, the intersection is the starting point of the segment, so return false
+                if (distance < 1e-8)
+                {
+                    return false;
+                }
+
+                // If the remaining step is also smaller than 1e-1, return false
+                if (CGAL::sqrt(segment.squared_length()) - distance < 1e-8)
+                {
+                    return false;
+                }
+
+                if (distance < min_distance)
+                {
+                    min_distance = distance;
+                    min_index = std::distance(_poly.facets_begin(), facet_it) + 1;
+                }
+            }
+        }
+    }
+
+    if (n_intersections > 1)
+    {
+        // TODO: Remove this warning if it is not needed
+        std::cout << "WARNING: More than one intersection found." << std::endl;
+    }
+
+    // If no intersection is found, return false
+    if (min_distance == std::numeric_limits<double>::max())
+    {
+        return false;
+    }
+
+    // If an intersection is found, return the index of the face and the distance to the intersection
+    return std::pair<int, double>(min_index, min_distance);
+}
+
+bool polygon::containsPoint(const Eigen::Vector3d &point)
+{
+    // Check if point is within min and max of the bounding box
+    if (_bbox.xmin() > point(0) || _bbox.xmax() < point(0) || _bbox.ymin() > point(1) || _bbox.ymax() < point(1) || _bbox.zmin() > point(2) || _bbox.zmax() < point(2))
+    {
+        return false;
+    }
+
+    // Define a ray that starts at the point and goes in the positive x direction
+    CGAL::Ray_3<Kernel> ray(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Vector_3(1, 0, 0));
+    int intersection_count = 0;
+
+    // Check if the point lies on any of the faces
+    CGAL::Point_3<Kernel> origin(point(0), point(1), point(2));
+    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
+    {
+        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
+        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
+        CGAL::Triangle_3<Kernel> triangle(p1, p2, p3);
+        if (CGAL::coplanar(p1, p2, p3, origin) && triangle.has_on(origin))
+        {
+            return true;
+        }
+    }
+
+    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
+    {
+        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
+        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
+        CGAL::Triangle_3<Kernel> triangle(p1, p2, p3);
+        boost::optional<boost::variant<CGAL::Point_3<Kernel>, CGAL::Segment_3<Kernel>>> intersection = CGAL::intersection(ray, triangle);
+        if (intersection)
+        {
+            intersection_count++;
+        }
+    }
+    return (intersection_count % 2) == 1;
 }

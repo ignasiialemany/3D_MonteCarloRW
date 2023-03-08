@@ -5,38 +5,44 @@
 #ifndef INC_3DRANDOMWALK_POLYGON_H
 #define INC_3DRANDOMWALK_POLYGON_H
 
-#include <Eigen/Dense>
-#include "boundingbox.h"
-#include "utility.h"
-#include <iostream>
+#include <CGAL/Simple_cartesian.h>
+#include <CGAL/Polyhedron_incremental_builder_3.h>
+#include <CGAL/Polyhedron_3.h>
+#include <CGAL/Polygon_mesh_processing/triangulate_faces.h>
+#include <CGAL/Polygon_mesh_processing/orient_polygon_soup.h>
+#include <cassert>
+#include <vector>
+#include <CGAL/Ray_3.h>
+#include <CGAL/Triangle_3.h>
+#include <CGAL/Vector_3.h>
+#include <CGAL/intersection_3.h>
+#include <CGAL/Bbox_3.h>
+#include <boost/optional.hpp>
 
-class polygon {
-
+typedef CGAL::Simple_cartesian<double>     Kernel;
+typedef CGAL::Polyhedron_3<Kernel>         Polyhedron;
+typedef Polyhedron::HalfedgeDS             HalfedgeDS;
+typedef Kernel::Point_3                    Point_3;
+class polygon
+{
 public:
+
     polygon() = default;
 
     polygon(const Eigen::MatrixXd &vertices_input, const Eigen::MatrixXd &faces_input);
-    //polygon(std::string box_type, Eigen::MatrixXd bounding_box);
 
-    double computeVolume();
-
+    //double computeVolume();
     double computeSurface();
 
-    std::pair<int,double> intersection(const Eigen::Vector3d &orig, const Eigen::Vector3d &dir);
+    boost::variant<bool,std::pair<int,double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
 
+    bool containsPoint(const Eigen::Vector3d &point);
 
-    double _volume=0;
-    double _surface=0;
-    int n_vertices;
-    int n_faces;
-    Eigen::MatrixXd vertices;
-    Eigen::MatrixXd faces;
-    boundingbox bounding_box;
-    Eigen::MatrixXd V1;
-    Eigen::MatrixXd V2;
-    Eigen::MatrixXd V3;
-
+private:
+    Polyhedron _poly;
+    std::vector<Point_3> _vertices;
+    std::vector<std::vector<std::size_t>> _faces;
+    CGAL::Bbox_3 _bbox;
 };
 
-
-#endif //INC_3DRANDOMWALK_POLYGON_H
+#endif // INC_3DRANDOMWALK_POLYGON_H
