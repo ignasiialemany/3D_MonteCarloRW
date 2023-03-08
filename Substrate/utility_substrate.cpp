@@ -60,7 +60,7 @@ std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> utility_sub
     else{
         printf("read_myocytes::non existent variable, please check your .mat file\n");
     }
-    
+
     Mat_Close(geometry);
 }
 
@@ -123,3 +123,39 @@ Eigen::MatrixXd utility_substrate::face_conversion(matvar_t *field){
     return output;
 }
 
+double utility_substrate::mod(double a, double b)
+{
+    int r = std::fmod(a,b);
+    return r < 0 ? r + b : r;
+}
+
+
+double utility_substrate::find_yslice(double y_global, Eigen::MatrixXd &y_slice_minmax)
+{
+    // To do : Use a binary search (now the worst possible method)
+    bool found = false;
+    for (int i = 0; i < y_slice_minmax.cols(); i++)
+    {
+        if (y_global > y_slice_minmax(0, i) and y_global < y_slice_minmax(1, i))
+        {
+            found = true;
+            return y_slice_minmax(0, i);
+        }
+    }
+
+    // Lost particle (Does not happen very often)
+    if (not(found))
+    {
+        throw std::logic_error("Transform::find_yslice::where', 'Corresponding slice not found'");
+        return -1;
+    }
+}
+
+Eigen::Vector3d utility_substrate::rotate_y(Eigen::Vector3d &position, double theta){
+    Eigen::Matrix3d rotation = Eigen::Matrix3d::Zero(3, 3);
+    rotation << std::cos(theta), 0, std::sin(theta),
+                 0, 1, 0,
+                -std::sin(theta), 0, std::cos(theta);
+    
+    return rotation*position;
+}

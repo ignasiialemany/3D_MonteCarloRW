@@ -13,3 +13,6 @@ substrate::substrate(std::vector<Eigen::MatrixXd> myo_vertices, std::vector<Eige
     }
 }
 
+void substrate::setTransform(transform &t)
+{
+}
