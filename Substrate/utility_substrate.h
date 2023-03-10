@@ -20,9 +20,9 @@ class utility_substrate {
 
     static double mod(double a, double b);
 
-    static double find_yslice(double y_global, Eigen::MatrixXd &y_slice_minmax);
+    static double find_yslice(double y_global, const Eigen::MatrixXd &y_slice_minmax);
 
-    static Eigen::Vector3d rotate_y(Eigen::Vector3d &position, double theta);
+    static Eigen::Vector3d rotate_y(const Eigen::Vector3d &position, double theta);
 };
 
 #endif //INC_3D_RANDOMWALK_UTILITY_SUBSTRATE_H

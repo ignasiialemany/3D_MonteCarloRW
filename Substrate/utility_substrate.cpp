@@ -136,7 +136,7 @@ double utility_substrate::mod(double a, double b)
 }
 
 
-double utility_substrate::find_yslice(double y_global, Eigen::MatrixXd &y_slice_minmax)
+double utility_substrate::find_yslice(double y_global, const Eigen::MatrixXd &y_slice_minmax)
 {
     // To do : Use a binary search (now the worst possible method)
     bool found = false;
@@ -157,7 +157,7 @@ double utility_substrate::find_yslice(double y_global, Eigen::MatrixXd &y_slice_
     }
 }
 
-Eigen::Vector3d utility_substrate::rotate_y(Eigen::Vector3d &position, double theta){
+Eigen::Vector3d utility_substrate::rotate_y(const Eigen::Vector3d &position, double theta){
     Eigen::Matrix3d rotation = Eigen::Matrix3d::Zero(3, 3);
     rotation << std::cos(theta), 0, std::sin(theta),
                  0, 1, 0,
