@@ -4,7 +4,7 @@
 
 #include "transform.h"
 
-transform_info transform::global2local(Eigen::Vector3d &global_position)
+transform_info transform::global2local(const Eigen::Vector3d &global_position) const
 {
     transform_info output;
 
@@ -42,7 +42,7 @@ transform_info transform::global2local(Eigen::Vector3d &global_position)
     }
 }
 
-Eigen::Vector3d transform::local2global(Eigen::Vector3d &local_position, int iX, int iY, int iZ)
+Eigen::Vector3d transform::local2global(const Eigen::Vector3d &local_position, int iX, int iY, int iZ)
 {
     int iX_new = iX -1;
     int iY_new = iY -1;
