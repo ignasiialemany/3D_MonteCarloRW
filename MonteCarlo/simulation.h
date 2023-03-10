@@ -53,7 +53,7 @@ private:
     parameters _params;
     static boost::variant<bool, std::runtime_error> checkBoundingBox(const Eigen::VectorXd &box);
     void one_walker(Particle &particle, const substrate &substrate, const sequence &sequence);
-    void one_dt(Particle &particle, const substrate &substrate, const sequence &sequence, std::mt19937 &rng_engine, std::pair<double, double> &step_magnitude);
+    void one_dt(Particle &particle, const substrate &substrate, const sequence &sequence, std::mt19937 &rng_engine, std::pair<double, double> &dTdG);
     void seeding(const Eigen::VectorXd &box);
     static Eigen::Vector3d getStep(std::mt19937 &rng_engine, int dimension, std::string step_type);
     double max_step = 5;

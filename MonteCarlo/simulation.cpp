@@ -28,7 +28,6 @@ bool simulation::seedParticlesInBox(const Eigen::VectorXd &bounding_box)
     return true;
 }
 
-
 boost::variant<bool, std::runtime_error> simulation::checkBoundingBox(const Eigen::VectorXd &box)
 {
     int dimensions = (int)box.size() / 2;
@@ -43,7 +42,6 @@ boost::variant<bool, std::runtime_error> simulation::checkBoundingBox(const Eige
     }
     return true;
 }
-
 
 void simulation::seeding(const Eigen::VectorXd &box)
 {
@@ -78,88 +76,99 @@ void simulation::performScan(const substrate &substrate, const sequence &sequenc
 
 void simulation::one_walker(Particle &particle, const substrate &substrate, const sequence &sequence)
 {
+    // TODO: Fill myo index for each particle, with try/catch for errors.
 
-    // TODO: This will have to be replaced with sequence gradient/timing
     std::mt19937 rng_engine(particle.seed);
 
     for (int i = 0; i < sequence.parameters.dt.size(); i++)
     {
+        // Get dT and dG values
+        double dt_magnitude = sequence.parameters.dt(i);
+        double dG_magnitude = sequence.parameters.gG(i);
+        std::pair<double, double> dTdG = std::make_pair(dt_magnitude, dG_magnitude);
+
+        // TODO: Calculate phase from dG and dT and position
+
+        // Initialize counter and flags
         int counter = 0;
         bool step_success = false;
-        // While the particle has not stepped
         while (!step_success)
         {
+            counter++;
+            if (counter > 50)
+            {
+                particle.flag = 2;
+                throw std::runtime_error("Runtime error: Stepping has stopped. Particle flagged");
+            }
+
             try
             {
-                counter++;
-                if (counter > 50)
-                {
-                    std::cout << "Stepping has stopped. Particle flagged" << std::endl;
-                    particle.flag = 2;
-                    // TODO: Throw error
-                    break;
-                }
-                // Update position
-                double dt_magnitude = sequence.parameters.dt(i);
-                double dG_magnitude = sequence.parameters.gG(i);
-                std::pair<double, double> step_magnitude = std::make_pair(dt_magnitude, dG_magnitude);
-                one_dt(particle, substrate, sequence, rng_engine, step_magnitude);
-                // If any throw error is called by one_dt will be caught here
+                // TODO: Probably delete sequence input from one_dt
+                one_dt(particle, substrate, sequence, rng_engine, dTdG);
                 step_success = true;
             }
             catch (const std::exception &ex)
             {
+                // TODO: Identify exceptions type from one_dt
             }
         }
     }
 }
 
-void simulation::one_dt(Particle &particle, const substrate &substrate, const sequence &sequence, std::mt19937 &rng_engine, std::pair<double, double> &step_magnitude)
+void simulation::one_dt(Particle &particle, const substrate &substrate, const sequence &sequence, std::mt19937 &rng_engine, std::pair<double, double> &dTdG)
 {
+    // Get step
     Eigen::Vector3d step = simulation::getStep(rng_engine, _params.dimension, _params.step_type);
-    double dt_magnitude = step_magnitude.first;
-    double dG_magnitude = step_magnitude.second;
-    double D_coeff_old;
+    double dt_magnitude = dTdG.first;
+    double dG_magnitude = dTdG.second;
+    double D_coeff_old, D_coeff_new;
 
-    if (particle.myocyte_index != 1)
-    {
-        D_coeff_old = _params.D_ecs;
-    }
-    else
-    {
-        D_coeff_old = _params.D_ics;
-    }
-
-    double D_coeff_new = D_coeff_old;
+    // Get D coefficient
+    D_coeff_old = (particle.myocyte_index != 1) ? _params.D_ecs : _params.D_ics;
+    D_coeff_new = D_coeff_old;
     step = step * std::sqrt(2 * dt_magnitude * D_coeff_old);
 
-    double probability_of_transit, ds, term; // Distrance normal to boundary
-    double D_low, l_low, p_fieremans, p_maruyama;
+    // Get variables for Transit Model (TODO: Maybe transit model as a _params enumerator or class?)
+    double probability_of_transit, ds, term, D_low, l_low, p_fieremans, p_maruyama;
+
     int counter = 0;
-    try
+    // TODO: Unify convergence epsilon in class, maybe simulation parameter?
+    double convergence_eps = 1e-12;
+    while (step.norm() > convergence_eps)
     {
-        double convergence_eps = 1e-12;
-        while (step.norm() > convergence_eps)
+        D_coeff_old = D_coeff_new;
+
+        // Throw logic_error if we we try to intersect more than 50 times
+        if (counter > 50) throw std::logic_error("Stepping error, stopped after trying 50 times");
+
+        // Get transform and local position/step
+        transform_info transform_data = substrate.getGlobalToLocal(particle.position);
+        Eigen::Vector3d local_position = transform_data.local_position;
+        Eigen::Vector3d local_step = utility_substrate::rotate_y(step, -transform_data.angle);
+
+        // Get intersection data
+        boost::variant<bool, std::pair<int, double>> intersection_data = substrate.intersection(local_position, local_step);
+
+        // If intersection is type bool
+        if (intersection_data.which() == 0)
         {
-            D_coeff_old = D_coeff_new;
+            Eigen::Vector3d new_position = local_position + local_step;
 
-            if (counter > 50)
-            {
-                throw std::logic_error("Stepping error, stopped after trying 50 times");
-            };
+            //TODO: Check if particle wants to leave the block, if it does update position till intersection and continue while loop
 
-            // TODO: Transform position from global 2 local
-            // TODO: rotate step
-            // TODO: check intersection
+            //TODO: If not just full update position and it will break the loop
         }
-    }
-    catch (const std::exception &ex)
-    {
+        else
+        {
+            // If there is intersection then get the distance to membrane (normal to face, so need normal vector)
+
+
+            
+        }
+
+    //TODO: Update position for the substep, make sure it is done last as any throw error would be caught in one_walker
     }
 
-    // TODO Retrieve myoindex and choose Diffusivity coefficient to D_coeff_old
-
-    // TODO init loop till the step has finished. Do as many substeps as needed
 }
 
 Eigen::Vector3d simulation::getStep(std::mt19937 &rng_engine, int dimension, std::string step_type)
