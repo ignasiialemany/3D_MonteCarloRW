@@ -3,3 +3,6 @@ third_party/
 build/
 .vscode/
 .idea/
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/settings.json
