@@ -115,13 +115,8 @@ TEST_CASE("Test intersection of point and step with polygon face that is too clo
     Eigen::Vector3d point(0.5, 0.5, 0);
     Eigen::Vector3d step(0, 0, 1);
 
-    // Check if the point and step intersect with any face
-    boost::variant<bool, std::pair<int, double>> intersection_info = poly.intersection(point, step);
-
-    bool is_variant_bool = intersection_info.which() == 0;
-    bool variant_bool_value = boost::get<bool>(intersection_info);
-    REQUIRE(is_variant_bool);
-    REQUIRE(variant_bool_value == false);
+    // Test if intersection function throws a std::runtime_error
+    REQUIRE_THROWS_AS([&] { poly.intersection(point, step); }(), std::runtime_error);
 }
 
 TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
