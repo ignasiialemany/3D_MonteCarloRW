@@ -48,7 +48,7 @@ public:
     Polyhedron getPolyhedron() { return _poly; };
     CGAL::Bbox_3 getBbox() { return _bbox; };
     //boost::variant<bool, std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
-    boost::variant<bool, std::pair<int,double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
+    boost::variant<bool, std::pair<int,double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
 
     //bool containsPoint(const Eigen::Vector3d &point);
     bool containsPoint(const Eigen::Vector3d &point);

@@ -161,7 +161,7 @@ boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::
     return std::pair<int, double>(min_index, min_distance);
 }
 */
-boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step)
+boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
 {
     Kernel::Segment_3 segment(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Point_3(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
     std::vector<std::pair<boost::variant<Kernel::Point_3, Kernel::Segment_3>, Primitive>> intersections;
@@ -188,7 +188,7 @@ boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::
             if (distance < min_distance)
             {
                 auto iter = intersection.second.id();
-                min_index = std::distance(triangle_faces.begin(), iter) + 1;
+                min_index = (iter - triangle_faces.begin())+1;
                 min_distance = distance;
             }
         }
@@ -202,12 +202,12 @@ boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::
     // If there is only one intersection, but it is right at the face min_distance is not updated
     if (min_distance == std::numeric_limits<double>::max())
     {
-        return false;
+        throw std::runtime_error("Intersection found but the point is exactly on the face.");
     }
     // If is too close to face or the remaining step is too short
     if (min_distance < 1e-8 || CGAL::sqrt(segment.squared_length()) - min_distance < 1e-8)
     {
-        return false;
+        throw std::runtime_error("Intersection found but the point is too close to the face or the remaining step is too short.");
     }
 
     return std::pair<int, double>(min_index, min_distance);
