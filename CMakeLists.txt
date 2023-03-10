@@ -19,7 +19,7 @@ add_subdirectory(third_party/matio-cpp-master)
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(OpenMP REQUIRED)
-find_package(Boost REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system filesystem)
 find_package(CGAL REQUIRED)
 
 include_directories(${Boost_INCLUDE_DIR})
@@ -37,12 +37,12 @@ file(GLOB_RECURSE SOURCES "${GEOMETRY_DIR}/*.cpp" "${SUBSTRATE_DIR}/*.cpp" "${MO
 file(GLOB_RECURSE HEADERS "${GEOMETRY_DIR}/*.h" "${SUBSTRATE_DIR}/*.h" "${MONTECARLO_DIR}/*.h" "${MRI_DIR}/*.h")
 
 # Add the source files for your project
-add_executable(myTests testing/testing_polygon.cpp ${SOURCES} ${HEADERS})
+add_executable(myTests testing/testing_polygon.cpp testing/testing_substrate.cpp ${SOURCES} ${HEADERS})
 add_executable(3DRandomWalk run_sim.cpp ${SOURCES} ${HEADERS})
 
 # Link against the yaml-cpp library
 target_link_libraries(3DRandomWalk Eigen3::Eigen yaml-cpp OpenMP::OpenMP_CXX ${Boost_LIBRARIES} CGAL::CGAL matioCpp::matioCpp)
-target_link_libraries(myTests Eigen3::Eigen Catch2::Catch2WithMain yaml-cpp OpenMP::OpenMP_CXX ${Boost_LIBRARIES} CGAL::CGAL matioCpp::matioCpp)
+target_link_libraries(myTests Eigen3::Eigen Catch2::Catch2WithMain yaml-cpp OpenMP::OpenMP_CXX ${Boost_LIBRARIES} CGAL::CGAL matioCpp::matioCpp Boost::filesystem Boost::system)
 
 
 
