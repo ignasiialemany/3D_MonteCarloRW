@@ -15,39 +15,47 @@
 #include <CGAL/Vector_3.h>
 #include <CGAL/intersection_3.h>
 #include <CGAL/Bbox_3.h>
-
+#include <CGAL/Point_3.h>
 #include <Eigen/Dense>
 #include <cassert>
 #include <vector>
 #include <boost/optional.hpp>
+#include <CGAL/AABB_tree.h>
+#include <CGAL/AABB_traits.h>
+#include <CGAL/AABB_triangle_primitive.h>
+#include <memory>
 
-typedef CGAL::Simple_cartesian<double>     Kernel;
-typedef CGAL::Polyhedron_3<Kernel>         Polyhedron;
-typedef Polyhedron::HalfedgeDS             HalfedgeDS;
-typedef Kernel::Point_3                    Point_3;
+typedef CGAL::Simple_cartesian<double> Kernel;
+typedef CGAL::Polyhedron_3<Kernel> Polyhedron;
+typedef Polyhedron::HalfedgeDS HalfedgeDS;
 
-
+// Define the AABB traits
+typedef std::vector<Kernel::Triangle_3>::iterator Iterator;
+typedef CGAL::AABB_triangle_primitive<CGAL::Simple_cartesian<double>, Iterator> Primitive;
+typedef CGAL::AABB_traits<CGAL::Simple_cartesian<double>, Primitive> AABB_triangle_traits;
+typedef CGAL::AABB_tree<AABB_triangle_traits> Tree_AABB;
 
 class polygon
 {
 public:
-
     polygon() = default;
 
     polygon(const Eigen::MatrixXd &vertices_input, const Eigen::MatrixXd &faces_input);
 
     double computeVolume();
     double computeSurface();
-
-    boost::variant<bool,std::pair<int,double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
+    Polyhedron getPolyhedron() { return _poly; };
+    CGAL::Bbox_3 getBbox() { return _bbox; };
+    boost::variant<bool, std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
 
     bool containsPoint(const Eigen::Vector3d &point);
 
 private:
     Polyhedron _poly;
-    std::vector<Point_3> _vertices;
+    std::vector<CGAL::Point_3<Kernel>> _vertices;
     std::vector<std::vector<std::size_t>> _faces;
     CGAL::Bbox_3 _bbox;
+    std::unique_ptr<Tree_AABB> _AABBtree;
 };
 
 #endif // INC_3DRANDOMWALK_POLYGON_H

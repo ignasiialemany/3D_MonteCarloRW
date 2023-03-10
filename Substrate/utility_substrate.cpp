@@ -3,6 +3,8 @@
 //
 
 #include "utility_substrate.h"
+#include <iostream>
+#include <boost/filesystem.hpp>
 
 std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> utility_substrate::read_mat_file(std::string &file)
 {
@@ -10,8 +12,11 @@ std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> utility_sub
     std::vector<Eigen::MatrixXd> vertices;
     std::vector<Eigen::MatrixXd> faces;    
 
+    std::cout << "Current directory is " << boost::filesystem::current_path() << std::endl;
+
+
     // Compile the full path
-    std::string fullpath = "myocytes/" + file;
+    std::string fullpath = file;
     const char *filepath = fullpath.c_str();
 
     // Read Mat file
@@ -62,6 +67,7 @@ std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> utility_sub
     }
 
     Mat_Close(geometry);
+    return std::make_pair(vertices, faces);
 }
 
 

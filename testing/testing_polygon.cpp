@@ -155,8 +155,3 @@ TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
     REQUIRE(variant.first == expected_intersection_info.first);
     REQUIRE(variant.second == expected_intersection_info.second);
 }
-
-TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
-{
-    //matioCpp::File file("data.mat");
-}

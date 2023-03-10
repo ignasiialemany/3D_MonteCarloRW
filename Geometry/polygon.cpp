@@ -7,26 +7,18 @@
 polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
 {
     // Create a bounding box from min max vertices
+    std::vector<Kernel::Triangle_3> triangle_faces;
 
     for (int i = 0; i < vertices.rows(); i++)
     {
-        _vertices.push_back(Point_3(vertices(i, 0), vertices(i, 1), vertices(i, 2)));
+        _vertices.push_back(CGAL::Point_3<Kernel>((double)vertices(i, 0), (double)vertices(i, 1), (double)vertices(i, 2)));
     }
 
     _bbox = CGAL::bbox_3(_vertices.begin(), _vertices.end());
 
-    for (int i = 0; i < faces.rows(); i++)
-    {
-        std::vector<std::size_t> face_input;
-        for (int j = 0; j < 3; j++)
-        {
-            face_input.push_back(faces(i, j) - 1);
-        }
-        _faces.push_back(face_input);
-    }
-    // Postcondition: hds is a valid polyhedral surface.
+    // Initialize the polyhedron builder
     CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> B(_poly.hds(), true);
-    B.begin_surface(_vertices.size(), _faces.size());
+    B.begin_surface(_vertices.size(), faces.rows());
 
     // Add vertices
     for (const auto &point : _vertices)
@@ -34,24 +26,35 @@ polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
         B.add_vertex(point);
     }
 
-    // Add faces
-    for (const auto &face : _faces)
+    // Add faces and triangle faces
+    for (int i = 0; i < faces.rows(); i++)
     {
+        std::vector<std::size_t> face_input;
+        for (int j = 0; j < 3; j++)
+        {
+            face_input.push_back(faces(i, j) - 1);
+        }
         B.begin_facet();
-        for (const auto &index : face)
+        for (const auto &index : face_input)
         {
             B.add_vertex_to_facet(index);
         }
         B.end_facet();
-    }
 
+        Kernel::Triangle_3 triangle_face(_vertices[face_input[0]], _vertices[face_input[1]], _vertices[face_input[2]]);
+        triangle_faces.push_back(triangle_face);
+    }
     B.end_surface();
+
+    _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
 }
+
+
 
 double polygon::computeVolume(){
     double volume=0;
 
-    Polyhedron::Point_3 centroid = CGAL::centroid(_vertices.begin(), _vertices.end());
+    Polyhedron::Point centroid = CGAL::centroid(_vertices.begin(), _vertices.end());
     // Compute the volume of each tetrahedron and add it to the volume
     for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
     {
@@ -75,7 +78,7 @@ double polygon::computeSurface()
     for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
     {
         Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
-        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3  p1 = he_circ->vertex()->point();
         Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
         Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
 
@@ -87,7 +90,7 @@ double polygon::computeSurface()
 boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step)
 {
     // Define a segment that starts at point and finishes at step+point;
-    CGAL::Segment_3<Kernel> segment(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Point_3(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
+    CGAL::Segment_3<Kernel> segment(CGAL::Point_3<Kernel>(point(0), point(1), point(2)), CGAL::Point_3<Kernel>(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
 
     double min_distance = std::numeric_limits<double>::max();
     int min_index = -1;
@@ -170,7 +173,7 @@ bool polygon::containsPoint(const Eigen::Vector3d &point)
     }
 
     // Define a ray that starts at the point and goes in the positive x direction
-    CGAL::Ray_3<Kernel> ray(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Vector_3(1, 0, 0));
+    CGAL::Ray_3<Kernel> ray(CGAL::Point_3<Kernel>(point(0), point(1), point(2)), CGAL::Vector_3<Kernel>(1, 0, 0));
     int intersection_count = 0;
 
     // Check if the point lies on any of the faces
@@ -182,7 +185,7 @@ bool polygon::containsPoint(const Eigen::Vector3d &point)
         Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
         Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
         CGAL::Triangle_3<Kernel> triangle(p1, p2, p3);
-        if (CGAL::coplanar(p1, p2, p3, origin) && triangle.has_on(origin))
+        if (triangle.has_on(origin))
         {
             return true;
         }
