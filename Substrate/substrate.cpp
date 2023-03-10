@@ -40,10 +40,8 @@ void substrate::setTransform(transform &t)
     _transform = t;
 }
 
-boost::variant<bool, std::pair<int, double>> substrate::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step)
+boost::variant<bool, std::pair<int, double>> substrate::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
 {
-    auto start = std::chrono::high_resolution_clock::now();  // start timer
-
     //We will place the point in the center of the block as the tree is built with the centroid of the polygons
     Kernel::Point_3 query((double)point(0), (double)point(1), 126.0/2);
 
@@ -54,7 +52,7 @@ boost::variant<bool, std::pair<int, double>> substrate::intersection(const Eigen
 
     for (Neighbor_search::iterator it = search.begin(); it != search.end(); ++it)
     {
-        boost::variant<bool,std::pair<int,double>> intersection = _myocytes[_map_centroid_to_polygon[it->first]].intersection(point, step);
+        boost::variant<bool,std::pair<int,double>> intersection = _myocytes[_map_centroid_to_polygon.at(it->first)].intersection(point, step);
         if (intersection.which() == 1)
         {
             //auto end = std::chrono::high_resolution_clock::now();  // end timer
@@ -63,7 +61,7 @@ boost::variant<bool, std::pair<int, double>> substrate::intersection(const Eigen
             if (boost::get<std::pair<int,double>>(intersection).second < min_distance_children)
             {
                 min_distance_children = boost::get<std::pair<int,double>>(intersection).second;
-                index_polygon = _map_centroid_to_polygon[it->first];
+                index_polygon = _map_centroid_to_polygon.at(it->first);
             }
         }
     }
