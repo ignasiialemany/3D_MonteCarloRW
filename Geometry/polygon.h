@@ -23,6 +23,7 @@
 #include <CGAL/AABB_tree.h>
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_triangle_primitive.h>
+#include <CGAL/Object.h>
 #include <memory>
 
 typedef CGAL::Simple_cartesian<double> Kernel;
@@ -46,16 +47,21 @@ public:
     double computeSurface();
     Polyhedron getPolyhedron() { return _poly; };
     CGAL::Bbox_3 getBbox() { return _bbox; };
-    boost::variant<bool, std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
+    //boost::variant<bool, std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
+    boost::variant<bool, std::pair<int,double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
 
+    //bool containsPoint(const Eigen::Vector3d &point);
     bool containsPoint(const Eigen::Vector3d &point);
 
 private:
+    //TODO: Might delete some of these variables, probably _vertices and _faces
     Polyhedron _poly;
     std::vector<CGAL::Point_3<Kernel>> _vertices;
     std::vector<std::vector<std::size_t>> _faces;
     CGAL::Bbox_3 _bbox;
     std::unique_ptr<Tree_AABB> _AABBtree;
+    std::vector<Kernel::Triangle_3> triangle_faces;
+
 };
 
 #endif // INC_3DRANDOMWALK_POLYGON_H

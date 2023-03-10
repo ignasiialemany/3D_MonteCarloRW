@@ -7,7 +7,6 @@
 polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
 {
     // Create a bounding box from min max vertices
-    std::vector<Kernel::Triangle_3> triangle_faces;
 
     for (int i = 0; i < vertices.rows(); i++)
     {
@@ -49,10 +48,9 @@ polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
     _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
 }
 
-
-
-double polygon::computeVolume(){
-    double volume=0;
+double polygon::computeVolume()
+{
+    double volume = 0;
 
     Polyhedron::Point centroid = CGAL::centroid(_vertices.begin(), _vertices.end());
     // Compute the volume of each tetrahedron and add it to the volume
@@ -63,12 +61,11 @@ double polygon::computeVolume(){
         Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
         Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
 
-        //Compute the pyramid volume of p1,p2,p3,centroid
+        // Compute the pyramid volume of p1,p2,p3,centroid
         volume += CGAL::abs(CGAL::volume(p1, p2, p3, centroid));
     }
     return volume;
 }
-
 
 double polygon::computeSurface()
 {
@@ -78,7 +75,7 @@ double polygon::computeSurface()
     for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
     {
         Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
-        Polyhedron::Point_3  p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
         Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
         Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
 
@@ -86,7 +83,7 @@ double polygon::computeSurface()
     }
     return surface_area;
 }
-
+/*
 boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step)
 {
     // Define a segment that starts at point and finishes at step+point;
@@ -163,7 +160,60 @@ boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::
     // If an intersection is found, return the index of the face and the distance to the intersection
     return std::pair<int, double>(min_index, min_distance);
 }
+*/
+boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step)
+{
+    Kernel::Segment_3 segment(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Point_3(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
+    std::vector<std::pair<boost::variant<Kernel::Point_3, Kernel::Segment_3>, Primitive>> intersections;
+    _AABBtree->all_intersections(segment, std::back_inserter(intersections));
+    double min_distance = std::numeric_limits<double>::max();
+    int min_index = -1;
 
+    // No intersection found
+    if (intersections.size() == 0)
+    {
+        return false;
+    }
+
+    for (const auto &intersection : intersections)
+    {
+        if (intersection.first.which() == 0)
+        {
+            Kernel::Point_3 point_intersected = boost::get<Kernel::Point_3>(intersection.first);
+            double distance = CGAL::sqrt(CGAL::squared_distance(point_intersected, segment.source()));
+            if (distance == 0)
+            {
+                continue;
+            }
+            if (distance < min_distance)
+            {
+                auto iter = intersection.second.id();
+                min_index = std::distance(triangle_faces.begin(), iter) + 1;
+                min_distance = distance;
+            }
+        }
+        else
+        {
+            // Handle intersection with segment, return false as it's not certain
+            return false;
+        }
+    }
+
+    // If there is only one intersection, but it is right at the face min_distance is not updated
+    if (min_distance == std::numeric_limits<double>::max())
+    {
+        return false;
+    }
+    // If is too close to face or the remaining step is too short
+    if (min_distance < 1e-8 || CGAL::sqrt(segment.squared_length()) - min_distance < 1e-8)
+    {
+        return false;
+    }
+
+    return std::pair<int, double>(min_index, min_distance);
+}
+
+/*
 bool polygon::containsPoint(const Eigen::Vector3d &point)
 {
     // Check if point is within min and max of the bounding box
@@ -205,4 +255,38 @@ bool polygon::containsPoint(const Eigen::Vector3d &point)
         }
     }
     return (intersection_count % 2) == 1;
+}
+*/
+bool polygon::containsPoint(const Eigen::Vector3d &point)
+{
+    if (_bbox.xmin() > point(0) || _bbox.xmax() < point(0) || _bbox.ymin() > point(1) ||
+        _bbox.ymax() < point(1) || _bbox.zmin() > point(2) || _bbox.zmax() < point(2))
+    {
+        return false;
+    }
+
+    // Define a ray that starts at the point and goes in the positive x direction
+    CGAL::Ray_3<Kernel> ray(CGAL::Point_3<Kernel>(point(0), point(1), point(2)), CGAL::Vector_3<Kernel>(1, 0, 0));
+
+    // Find all intersections between the ray and the triangles in the AABB tree
+    std::vector<std::pair<boost::variant<Kernel::Point_3, Kernel::Segment_3>, Primitive>> intersections;
+    _AABBtree->all_intersections(ray, std::back_inserter(intersections));
+
+    for (const auto &intersection : intersections)
+    {
+        if (intersection.first.which() == 0)
+        {
+            Kernel::Point_3 point_intersected = boost::get<Kernel::Point_3>(intersection.first);
+            Primitive intersection_primitive = intersection.second;
+            auto iter = intersection_primitive.id();
+            int index = iter - triangle_faces.begin();
+            if (triangle_faces[index].has_on(point_intersected))
+            {
+                return true;
+            }
+        }
+    }
+
+    // Check if the number of intersections is odd
+    return (intersections.size() % 2) == 1;
 }
