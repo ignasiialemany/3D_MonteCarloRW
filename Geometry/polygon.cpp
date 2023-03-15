@@ -7,44 +7,11 @@
 polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
 {
     // Create a bounding box from min max vertices
-
-    for (int i = 0; i < vertices.rows(); i++)
-    {
-        _vertices.push_back(CGAL::Point_3<Kernel>((double)vertices(i, 0), (double)vertices(i, 1), (double)vertices(i, 2)));
-    }
-
-    _bbox = CGAL::bbox_3(_vertices.begin(), _vertices.end());
-
-    // Initialize the polyhedron builder
-    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> B(_poly.hds(), true);
-    B.begin_surface(_vertices.size(), faces.rows());
-
-    // Add vertices
-    for (const auto &point : _vertices)
-    {
-        B.add_vertex(point);
-    }
-
-    // Add faces and triangle faces
-    for (int i = 0; i < faces.rows(); i++)
-    {
-        std::vector<std::size_t> face_input;
-        for (int j = 0; j < 3; j++)
-        {
-            face_input.push_back(faces(i, j) - 1);
-        }
-        B.begin_facet();
-        for (const auto &index : face_input)
-        {
-            B.add_vertex_to_facet(index);
-        }
-        B.end_facet();
-
-        Kernel::Triangle_3 triangle_face(_vertices[face_input[0]], _vertices[face_input[1]], _vertices[face_input[2]]);
-        triangle_faces.push_back(triangle_face);
-    }
-    B.end_surface();
-
+    Kernel::Point_3 min_point = Kernel::Point_3(vertices.col(0).minCoeff(), vertices.col(1).minCoeff(), vertices.col(2).minCoeff());
+    Kernel::Point_3 max_point = Kernel::Point_3(vertices.col(0).maxCoeff(), vertices.col(1).maxCoeff(), vertices.col(2).maxCoeff());
+    //createBbox(min_point, max_point);
+    createPolygon(vertices, faces);
+    _solid_bbox = CGAL::Bbox_3(min_point.x(), min_point.y(), min_point.z(), max_point.x(), max_point.y(), max_point.z());
     _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
 }
 
@@ -161,7 +128,7 @@ boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::
     return std::pair<int, double>(min_index, min_distance);
 }
 */
-boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
+boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
 {
     Kernel::Segment_3 segment(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Point_3(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
     std::vector<std::pair<boost::variant<Kernel::Point_3, Kernel::Segment_3>, Primitive>> intersections;
@@ -172,39 +139,36 @@ boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::
     // No intersection found
     if (intersections.size() == 0)
     {
-        return false;
+        return boost::optional<std::pair<int, double>>();
     }
 
     for (const auto &intersection : intersections)
     {
+        // If intersection is point
         if (intersection.first.which() == 0)
         {
             Kernel::Point_3 point_intersected = boost::get<Kernel::Point_3>(intersection.first);
             double distance = CGAL::sqrt(CGAL::squared_distance(point_intersected, segment.source()));
-            if (distance == 0)
-            {
-                continue;
-            }
-            if (distance < min_distance)
+            if (distance < min_distance && distance > 0)
             {
                 auto iter = intersection.second.id();
-                min_index = (iter - triangle_faces.begin())+1;
+                min_index = (iter - triangle_faces.begin());
                 min_distance = distance;
             }
         }
         else
         {
-            // Handle intersection with segment, return false as it's not certain
-            return false;
+            std::runtime_error("Intersection found with polygon but is a segment. The step is parallel to the face and lies within it");
         }
     }
 
-    // If there is only one intersection, but it is right at the face min_distance is not updated
+    // If there is only one intersection, but it is right at the face. (min_distance is not updated because distance=0)
     if (min_distance == std::numeric_limits<double>::max())
     {
         throw std::runtime_error("Intersection found but the point is exactly on the face.");
     }
     // If is too close to face or the remaining step is too short
+    // TODO: Unify epsilon values in the code
     if (min_distance < 1e-8 || CGAL::sqrt(segment.squared_length()) - min_distance < 1e-8)
     {
         throw std::runtime_error("Intersection found but the point is too close to the face or the remaining step is too short.");
@@ -257,14 +221,13 @@ bool polygon::containsPoint(const Eigen::Vector3d &point)
     return (intersection_count % 2) == 1;
 }
 */
-bool polygon::containsPoint(const Eigen::Vector3d &point)
+bool polygon::containsPoint(const Eigen::Vector3d &point) const
 {
-    if (_bbox.xmin() > point(0) || _bbox.xmax() < point(0) || _bbox.ymin() > point(1) ||
-        _bbox.ymax() < point(1) || _bbox.zmin() > point(2) || _bbox.zmax() < point(2))
+    if (_solid_bbox.xmin() > point(0) || _solid_bbox.xmax() < point(0) || _solid_bbox.ymin() > point(1) ||
+        _solid_bbox.ymax() < point(1) || _solid_bbox.zmin() > point(2) || _solid_bbox.zmax() < point(2))
     {
         return false;
     }
-
     // Define a ray that starts at the point and goes in the positive x direction
     CGAL::Ray_3<Kernel> ray(CGAL::Point_3<Kernel>(point(0), point(1), point(2)), CGAL::Vector_3<Kernel>(1, 0, 0));
 
@@ -289,4 +252,97 @@ bool polygon::containsPoint(const Eigen::Vector3d &point)
 
     // Check if the number of intersections is odd
     return (intersections.size() % 2) == 1;
+}
+
+Eigen::Vector3d polygon::getNormalVector(int index_face) const
+{
+    // Obtain triangle from index
+    Kernel::Triangle_3 triangle = triangle_faces[index_face];
+
+    // Obtain the normal vector from Kernel::Triangle_3
+    Kernel::Vector_3 normal_vector = triangle.supporting_plane().orthogonal_vector();
+    normal_vector = normal_vector / CGAL::sqrt(normal_vector.squared_length());
+
+    // Transform to Eigen
+    Eigen::Vector3d normal_vector_eigen(normal_vector.x(), normal_vector.y(), normal_vector.z());
+
+    return normal_vector_eigen;
+}
+
+void polygon::createPolygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
+{
+    for (int i = 0; i < vertices.rows(); i++)
+    {
+        _vertices.push_back(CGAL::Point_3<Kernel>((double)vertices(i, 0), (double)vertices(i, 1), (double)vertices(i, 2)));
+    }
+    // Initialize the polyhedron builder
+    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> B(_poly.hds(), true);
+    B.begin_surface(_vertices.size(), faces.rows());
+
+    // Add vertices
+    for (const auto &point : _vertices)
+    {
+        B.add_vertex(point);
+    }
+
+    // Add faces and triangle faces
+    for (int i = 0; i < faces.rows(); i++)
+    {
+        std::vector<std::size_t> face_input;
+        for (int j = 0; j < 3; j++)
+        {
+            face_input.push_back(faces(i, j) - 1);
+        }
+        B.begin_facet();
+        for (const auto &index : face_input)
+        {
+            B.add_vertex_to_facet(index);
+        }
+        B.end_facet();
+
+        Kernel::Triangle_3 triangle_face(_vertices[face_input[0]], _vertices[face_input[1]], _vertices[face_input[2]]);
+        triangle_faces.push_back(triangle_face);
+        _faces.push_back(face_input);
+    }
+    B.end_surface();
+}
+
+//TODO: move this function to utility class, same is applied to transform.cpp
+void polygon::createBbox(Kernel::Point_3 min_point, Kernel::Point_3 max_point)
+{
+
+    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> builder(_bbox.hds(), true);
+    builder.begin_surface(8, 12);
+    std::vector<Kernel::Triangle_3> triangles;
+
+    // Add vertices
+    std::vector<Kernel::Point_3> vertices = {
+        min_point,
+        Kernel::Point_3(max_point.x(), min_point.y(), min_point.z()),
+        Kernel::Point_3(max_point.x(), max_point.y(), min_point.z()),
+        Kernel::Point_3(min_point.x(), max_point.y(), min_point.z()),
+        Kernel::Point_3(min_point.x(), min_point.y(), max_point.z()),
+        Kernel::Point_3(max_point.x(), min_point.y(), max_point.z()),
+        max_point,
+        Kernel::Point_3(min_point.x(), max_point.y(), max_point.z())};
+
+    for (const auto &vertex : vertices)
+    {
+        builder.add_vertex(vertex);
+    }
+
+    // Add faces (as triangles)
+    std::vector<std::vector<int>> triangle_face_indices = {
+        {0, 1, 2}, {0, 2, 3}, {4, 5, 6}, {4, 6, 7}, {0, 1, 5}, {0, 5, 4}, {1, 2, 6}, {1, 6, 5}, {2, 3, 7}, {2, 7, 6}, {3, 0, 4}, {3, 4, 7}};
+
+    for (const auto &face : triangle_face_indices)
+    {
+        builder.begin_facet();
+        for (int vertex_index : face)
+        {
+            builder.add_vertex_to_facet(vertex_index);
+        }
+        builder.end_facet();
+    }
+    builder.end_surface();
 }
