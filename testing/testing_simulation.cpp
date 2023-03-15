@@ -2,63 +2,102 @@
 #include <iostream>
 #include <stdexcept>
 #include <catch2/catch_test_macros.hpp>
+#include <boost/filesystem.hpp>
 
-/*
+TEST_CASE("Seeding particles in bounding box", "[simulation]")
+{
 
-bool check_seeding(int seed1,double min_x,double max_x, double min_y, double max_y, double min_z, double max_z){
+    int seed = 1;
+    walkers particles(1000, seed);
+    simulation sim(particles);
 
-    walkers particles(100000, seed1,"constant");
-    simulation rw_particles(particles);
-
-    Eigen::VectorXd box(6);
-    box << min_x,max_x,min_y,max_y,min_z,max_z;
-
-    auto isValid = rw_particles.seedParticlesInBox(box);
-    if (!isValid){
-        throw std::runtime_error("error");
+    SECTION("Valid bounding box")
+    {
+        Eigen::VectorXd bounding_box(6);
+        bounding_box << 0.0, 1.0, 0.0, 1.0, 0.0, 1.0;
+        bool isSeedingSuccessful = sim.seedParticlesInBox(bounding_box);
+        REQUIRE(isSeedingSuccessful == true);
     }
 
-    auto positions = rw_particles.getPositions();
+    SECTION("Invalid bounding box (min > max)")
+    {
+        Eigen::VectorXd bounding_box(6);
+        bounding_box << 1.0, 0.0, 1.0, 0.0, 1.0, 0.0;
+        REQUIRE(sim.seedParticlesInBox(bounding_box) == false);
+    }
 
-    for (int i=0; i<positions.cols(); i++){
-        auto column = positions.col(i);
-        double column_min = column.minCoeff();
-        double column_max = column.maxCoeff();
-        if (column_min < box(2*i) or column_max > box(2*i+1)){
-            return false;
+    SECTION("Check particles in bounding box")
+    {
+        Eigen::VectorXd bounding_box(6);
+        bounding_box << 0.0, 250., 0.0, 250., 0.0, 800.;
+        if (sim.seedParticlesInBox(bounding_box))
+        {
+            for (int i = 0; i < particles.get_number_of_particles(); i++)
+            {
+                Particle p = particles.get_particle(i);
+                REQUIRE(p.position(0) >= bounding_box(0));
+                REQUIRE(p.position(0) <= bounding_box(1));
+                REQUIRE(p.position(1) >= bounding_box(2));
+                REQUIRE(p.position(1) <= bounding_box(3));
+                REQUIRE(p.position(2) >= bounding_box(4));
+                REQUIRE(p.position(2) <= bounding_box(5));
+            }
         }
-        else{
-            continue;
-        }
-    }
-    return true;
-}
-
-bool unique_seeding(int seed1, int seed2,  double min_x,double max_x, double min_y, double max_y, double min_z, double max_z){
-    walkers particles_1(100000, seed1,"constant");
-    walkers particles_2(100000, seed2,"constant");
-    simulation rw_particles1(particles_1);
-    simulation rw_particles2(particles_2);
-
-    Eigen::VectorXd box(6);
-    box << min_x,max_x,min_y,max_y,min_z,max_z;
-
-    rw_particles1.seedParticlesInBox(box);
-    rw_particles2.seedParticlesInBox(box);
-
-    return rw_particles1.getPositions()==rw_particles2.getPositions();
-}
-
-TEST_CASE( "Check particles are bounded within box", "[check_seeding]" ) {
-    REQUIRE(check_seeding(13412,0.,100.,0.,100.,0.,700.) == true );
-    REQUIRE(check_seeding(13412,235.,2345.,212.,1512.,1.,5.) == true );
-    SECTION("error condition"){
-    REQUIRE_THROWS_AS(check_seeding(1,235.,2345.,2000.,1512.,1.,5.),std::runtime_error);
-    REQUIRE_THROWS_AS(check_seeding(1800,235.,2345.,2000.,1512.,1.,5.),std::runtime_error);
     }
 }
 
-TEST_CASE( "Check unique seeding","[unique_seeding]"){
-    REQUIRE(unique_seeding(1230,1234,0,100,0,100,0,600)==false);
-    REQUIRE(unique_seeding(1230,1230,0,100,0,100,0,600)==true);
-}*/
+TEST_CASE("one_dt", "[one_dt]")
+{
+
+    oneGenerator fixed_rng_engine;
+
+    auto cwd = boost::filesystem::current_path();
+    auto parent_path = cwd.parent_path();
+    std::string parent_path_str = parent_path.string();
+
+    std::string sub_path = "/testing/data/geometry_1.mat";
+    std::string sub_full_path = parent_path_str + sub_path;
+
+    simulation sim;
+    std::string step_type = "constant";
+    std::string transit_model = "whatever";
+    sim.set_parameters(2, 3, step_type, transit_model, 2.5, 1., 0.05);
+    walkers particle(1, 1);
+    auto myo = utility_substrate::read_mat_file(sub_full_path);
+    substrate sub(myo.first, myo.second);
+
+    transform t(0.01, true, false);
+    t.set_block(495.3992, 392.3432, 126.5612);
+    sub.setTransform(t);
+
+    particle.get_particle(0).position << 1433.5427938, 910.0219397, 3206.792634463;
+    int myo_index = sub.searchPolygon(particle.get_particle(0).position, "global");
+    particle.get_particle(0).myocyte_index = myo_index;
+    sim.one_dt<oneGenerator>(particle.get_particle(0), sub, fixed_rng_engine, 1);
+    Eigen::Vector3d expected_position(1434.9570073623731, 911.4361532623731, 3208.2068479267462);
+    Eigen::Vector3d diff = expected_position - particle.get_particle(0).position;
+    REQUIRE(std::abs(diff.norm()) < 1e-6);
+
+
+    //This case checks intersection with block, intersection with cardiomyoycte (reflection) and  no intersection
+    particle.get_particle(0).position << 905.37515026, 1542.7427839, 586.83012998;
+    myo_index = sub.searchPolygon(particle.get_particle(0).position, "global");
+    particle.get_particle(0).myocyte_index = myo_index;
+    sim.one_dt<oneGenerator>(particle.get_particle(0), sub, fixed_rng_engine, 0.4886875);
+    Eigen::Vector3d expected_position_2(906.13982179, 1544.271804, 585.858874785);
+    Eigen::Vector3d diff_2 = expected_position_2 - particle.get_particle(0).position;
+    REQUIRE(std::abs(diff_2.norm()) < 1e-6);
+
+
+     //This case checks intersection with block, intersection with cardiomyoycte (reflection) and  no intersection
+    particle.get_particle(0).position << 979.858916463534,614.924794934872,7289.33203526935;
+    myo_index = sub.searchPolygon(particle.get_particle(0).position, "global");
+    particle.get_particle(0).myocyte_index = myo_index;
+    sim.one_dt<oneGenerator>(particle.get_particle(0), sub, fixed_rng_engine, 0.4886875);
+    Eigen::Vector3d expected_position_3(981.422066328390,616.487944799729,7290.89518513421);
+    Eigen::Vector3d diff_3 = expected_position_3 - particle.get_particle(0).position;
+    REQUIRE(std::abs(diff_3.norm()) < 1e-6);
+    
+
+
+}

@@ -1,0 +1,30 @@
+sequence:
+  type: MCSE
+  PGSE:
+    Gmax: 40.572
+    Delta: 20.547
+    epsilon: 0.676
+    delta: 9.921
+    alpha90: 1
+    alphaRO: 1
+  MCSE:
+    Gmax: 39.478
+    epsilon: 0.661
+    delta1: 7.819
+    delta2: 16.299
+    alpha90: 1
+    alphaRO: 1
+  STEAM:
+    Gmax: 35.690
+    Delta: 1000
+    epsilon: 0.595
+    delta: 0.977
+    alpha90: 1
+    alphaRO: 1
+  gamma: 267.5e-6  # rad/ms/mT (it contains 10^-6 because the gradient is in mT/m and positions in um)
+  # number of time steps
+  N_t: 50
+  # time step limit [dt_free, dt_grad]
+  dt_max:
+    - 1 # during gradient-off (free)
+    - 0.5 # during gradient-on

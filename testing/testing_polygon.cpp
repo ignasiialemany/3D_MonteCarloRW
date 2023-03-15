@@ -6,6 +6,7 @@
 #include "../Geometry/polygon.h"
 #include <matioCpp/matioCpp.h>
 
+
 TEST_CASE("Compute surface of polygon", "[polygon]")
 {
 
@@ -139,14 +140,17 @@ TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
     Eigen::Vector3d step(0, 0, 1);
 
     // Check if the point and step intersect with the fourth face
-    boost::variant<bool, std::pair<int, double>> intersection_info = poly.intersection(point, step);
+    boost::optional<std::pair<int, double>> intersection_info = poly.intersection(point, step);
 
     // The expected intersection info is that the point and step intersect with the fourth face
-    std::pair<int, double> expected_intersection_info(4, 0.6);
+    std::pair<int, double> expected_intersection_info(3, 0.6);
 
-    bool is_variant_bool = intersection_info.which() == 1;
-    std::pair<int, double> variant = boost::get<std::pair<int, double>>(intersection_info);
-    REQUIRE(is_variant_bool);
-    REQUIRE(variant.first == expected_intersection_info.first);
-    REQUIRE(variant.second == expected_intersection_info.second);
+    if (!intersection_info)
+    {
+        FAIL("The point and step do not intersect with the polygon");
+    }
+    else{
+        REQUIRE((*intersection_info).first == expected_intersection_info.first);
+        REQUIRE((*intersection_info).second == expected_intersection_info.second);
+    }
 }
