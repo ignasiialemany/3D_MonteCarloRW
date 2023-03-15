@@ -24,8 +24,6 @@ struct sequence_parameters
     int number_of_timesteps;
     double dt_max_free;
     double dt_max_grad;
-    Eigen::VectorXd dt;
-    Eigen::MatrixXd gG;
 };
 
 class sequence
@@ -34,29 +32,33 @@ public:
     sequence(const std::string &filename)
     {
         YAML::Node config = YAML::LoadFile(filename);
-        parameters.type = config["sequence"]["type"].as<std::string>();
-        parameters.G_max = config["sequence"][parameters.type]["G"].as<double>();
-        parameters.Delta = config["sequence"][parameters.type]["Delta"].as<double>();
-        parameters.epsilon = config["sequence"][parameters.type]["epsilon"].as<double>();
+        std::string sequence_type = config["sequence"]["type"].as<std::string>();
+        parameters.type = sequence_type;
+        YAML::Node params = config["sequence"][sequence_type];
+        parameters.G_max = params["Gmax"].as<double>();
+        parameters.epsilon = params["epsilon"].as<double>();
         if (parameters.type == "MCSE")
         {
-            parameters.delta = config["sequence"][parameters.type]["delta1"].as<double>();
-            parameters.delta2 = config["sequence"][parameters.type]["delta2"].as<double>();
+            parameters.delta = params["delta1"].as<double>();
+            parameters.delta2 = params["delta2"].as<double>();
         }
         else
         {
-            parameters.delta = config["sequence"][parameters.type]["delta"].as<double>();
+            parameters.Delta =params["Delta"].as<double>();
+            parameters.delta = params["delta"].as<double>();
         }
-        parameters.alpha90 = config["sequence"][parameters.type]["alpha90"].as<double>();
-        parameters.alphaR0 = config["sequence"][parameters.type]["alphaR0"].as<double>();
-        parameters.gamma = config["sequence"][parameters.type]["gamma"].as<double>();
-        parameters.number_of_timesteps = config["sequence"][parameters.type]["N_t"].as<int>();
-        parameters.dt_max_free = config["sequence"][parameters.type]["dt_max"][0].as<double>();
-        parameters.dt_max_grad = config["sequence"][parameters.type]["dt_max"][1].as<double>();
+        parameters.alpha90 = params["alpha90"].as<double>();
+        parameters.alphaR0 = params["alphaRO"].as<double>();
+        parameters.gamma = config["sequence"]["gamma"].as<double>();
+        parameters.number_of_timesteps = config["sequence"]["N_t"].as<int>();
+        parameters.dt_max_free = config["sequence"]["dt_max"][0].as<double>();
+        parameters.dt_max_grad = config["sequence"]["dt_max"][1].as<double>();
     };
     sequence_parameters parameters;
     void create();
     void discretize(Eigen::VectorXd durations, Eigen::VectorXd ids);
+    Eigen::VectorXd dt;
+    Eigen::VectorXd gG;
 };
 
 #endif // INC_3DRANDOMWALK_SEQUENCE_H

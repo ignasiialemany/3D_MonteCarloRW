@@ -29,11 +29,12 @@ void sequence::create()
     }
     else
     {
-        parameters.gamma = 1;
-        parameters.dt = Eigen::VectorXd::Ones(parameters.number_of_timesteps) * parameters.dt_max_free;
-        parameters.gG = Eigen::MatrixXd::Zero(parameters.number_of_timesteps, 1);
+        //TODO: Check this is correct
+        //parameters.gamma = 1;
+        dt = Eigen::VectorXd::Ones(parameters.number_of_timesteps) * parameters.dt_max_free;
+        gG = Eigen::VectorXd::Zero(parameters.number_of_timesteps);
     }
-    parameters.gG = parameters.gG * parameters.gamma;
+    gG = gG * parameters.gamma;
 }
 
 void sequence::discretize(Eigen::VectorXd durations, Eigen::VectorXd ids)
@@ -64,8 +65,8 @@ void sequence::discretize(Eigen::VectorXd durations, Eigen::VectorXd ids)
         }
     }
 
-    parameters.dt = Eigen::VectorXd::Zero(0);
-    parameters.gG = Eigen::MatrixXd::Zero(0, 0);
+    dt = Eigen::VectorXd::Zero(0);
+    gG = Eigen::VectorXd::Zero(0);
 
     // Temporarily store data
     double gA, gB;
@@ -74,13 +75,14 @@ void sequence::discretize(Eigen::VectorXd durations, Eigen::VectorXd ids)
         double Nt_i = Nt_intervals(i);
         double dt_i = durations(i) / Nt_i;
         // For repetition
-        Eigen::VectorXd dt_temp = parameters.dt;
+        Eigen::VectorXd dt_temp = dt;
         Eigen::VectorXd dt_rep = Eigen::VectorXd::Ones(Nt_i) * dt_i;
-        parameters.dt.resize(dt_temp.rows() + Nt_i);
-        parameters.dt << dt_temp, dt_rep;
+        dt.resize(dt_temp.rows() + Nt_i);
+        dt << dt_temp, dt_rep;
 
         // gradient
         double id_i = ids(i);
+        double sign = std::signbit((int)id_i) ? -1 : 1;
         switch (std::abs((int)id_i))
         {       // use absolute value for switch and use sign(id_i) inside cases
         case 0: // flat, gradient off
@@ -89,30 +91,23 @@ void sequence::discretize(Eigen::VectorXd durations, Eigen::VectorXd ids)
             break;
         case 1: // ramp-up gradient
             gA = 0;
-            gB = std::signbit(id_i) * parameters.G_max;
+            gB = sign * parameters.G_max;
             break;
         case 2: // flat, gradient on
-            gA = std::signbit(id_i) * parameters.G_max;
+            gA = sign * parameters.G_max;
             gB = gA;
             break;
         case 3: // ramp-down gradient
-            gA = std::signbit(id_i) * parameters.G_max;
+            gA = sign * parameters.G_max;
             gB = 0;
             break;
         default:
             printf("sequence::Ids input out of bound, please check the values of Ids");
         }
-        Eigen::MatrixXd gG_temp = parameters.gG;
-        Eigen::MatrixXd gvals = Eigen::VectorXd::LinSpaced(Nt_i, gA, gB - (gB - gA) / (Nt_i));
+        Eigen::VectorXd gvals = Eigen::VectorXd::LinSpaced(Nt_i+1, gA, gB);
         // gvals.resize(Nt_i, 1); // Removing the last element
-        parameters.gG.resize(gG_temp.rows() + (Nt_i), 1);
-        if (i == 0)
-        {
-            parameters.gG << gvals;
-        }
-        else
-        {
-            parameters.gG << gG_temp, gvals;
-        }
+        Eigen::VectorXd gvals_segmented = gvals.segment(0,gvals.rows()-1);
+        gG.conservativeResize(gG.rows() + gvals_segmented.rows());
+        gG.tail(gvals_segmented.rows()) = gvals_segmented;
     }
 }
