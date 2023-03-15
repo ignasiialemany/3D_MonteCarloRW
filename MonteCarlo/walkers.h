@@ -22,8 +22,8 @@ public:
     ~walkers() = default;
     walkers(int Np, int seed); // Construtor definition
     Particle &get_particle(int index) { return _particles.at(index); };
-    [[nodiscard]] int get_number_of_particles() const { return _number_of_particles; };
-    [[nodiscard]] int get_global_seed() const { return _rng_seed; };
+    int get_number_of_particles() const { return _number_of_particles; };
+    int get_global_seed() const { return _rng_seed; };
 
 private:
     int _number_of_particles = 0; // Number of particles

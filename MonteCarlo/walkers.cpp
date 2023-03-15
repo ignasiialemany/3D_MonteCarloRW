@@ -8,6 +8,7 @@ walkers::walkers(const int Np, const int seed)
 {
     _number_of_particles = Np;
     _rng_seed = seed;
+    _particles.resize(_number_of_particles);
     // Generate unique seeds for each particle and init positions/phase/flags
     generate_unique_seeds();
 }
@@ -24,6 +25,7 @@ void walkers::generate_unique_seeds()
         {
             Particle &particle = get_particle(counter);
             particle.seed = seed;
+            _seed_set.insert(seed);
             counter++;
         }
     }

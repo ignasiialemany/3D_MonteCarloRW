@@ -9,15 +9,18 @@
 #include "walkers.h"
 #include "../Substrate/substrate.h"
 #include <boost/variant.hpp>
+#include <omp.h>
+#include "../testing/oneGenerator.h"
 
 struct parameters
 {
     int cores;
-    int dimension;
-    std::string step_type;
+    int dimension = 3;
+    std::string step_type = "constant";
     std::string transit_model;
-    double D_ecs;
-    double D_ics;
+    double D_ecs = 2.5;
+    double D_ics = 1.;
+    double kappa = 0.05;
 };
 
 class simulation
@@ -46,16 +49,22 @@ public:
     bool seedParticlesInBox(const Eigen::VectorXd &boundingbox);
     walkers getParticles() { return _particles; };
     void performScan(const substrate &substrate, const sequence &sequence);
-    void set_parameters(int cores, int dimension, std::string &step_type);
+
+    template <typename URNG>
+    void one_dt(Particle &particle, const substrate &substrate, URNG &rng_engine, double dt);
+
+    void one_walker(Particle &particle, const substrate &substrate, const sequence &sequence);
+    void set_parameters(int cores, int dimension, std::string &step_type, std::string &transit_model, double D_ecs, double D_ics, double kappa);
 
 private:
     walkers _particles;
     parameters _params;
     static boost::variant<bool, std::runtime_error> checkBoundingBox(const Eigen::VectorXd &box);
-    void one_walker(Particle &particle, const substrate &substrate, const sequence &sequence);
-    void one_dt(Particle &particle, const substrate &substrate, const sequence &sequence, std::mt19937 &rng_engine, std::pair<double, double> &dTdG);
     void seeding(const Eigen::VectorXd &box);
-    static Eigen::Vector3d getStep(std::mt19937 &rng_engine, int dimension, std::string step_type);
+
+    template <typename URNG>
+    static Eigen::Vector3d getStep(URNG &rng_engine, int dimension, std::string step_type);
+
     double max_step = 5;
 };
 
