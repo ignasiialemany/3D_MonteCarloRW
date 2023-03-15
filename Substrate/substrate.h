@@ -29,12 +29,13 @@ public:
     substrate(std::vector<Eigen::MatrixXd> &myo_vertices, std::vector<Eigen::MatrixXd> &myo_faces);
     void setTransform(transform &t);
 
-    transform_info getGlobalToLocal(const Eigen::Vector3d &global_position) const { return _transform.global2local(global_position); };
-    Eigen::Vector3d getLocalToGlobal(const Eigen::Vector3d &local_position, int iX, int iY, int iZ) { return _transform.local2global(local_position, iX, iY, iZ); };
+    transform_info getLocalFromGlobal(const Eigen::Vector3d &global_position) const { return _transform.global2local(global_position); };
+    Eigen::Vector3d getGlobalFromLocal(const Eigen::Vector3d &local_position, int iX, int iY, int iZ) const { return _transform.local2global(local_position, iX, iY, iZ); };
 
-    bool containsPoint(int index_polygon, Eigen::Vector3d &point) { return _myocytes[index_polygon].containsPoint(point); };
-    boost::variant<bool, std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
-    int searchPolygon(Eigen::Vector3d &point);
+    bool containsPoint(int index_polygon, const Eigen::Vector3d &point) const { return _myocytes[index_polygon].containsPoint(point); };
+    boost::optional<std::tuple<int, double, Eigen::Vector3d>> intersectPolygon(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
+    boost::optional<double> intersectionBlock(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
+    int searchPolygon(const Eigen::Vector3d &point, const std::string &frameOfReference = "local") const;
 
 private:
     std::vector<polygon> _myocytes;

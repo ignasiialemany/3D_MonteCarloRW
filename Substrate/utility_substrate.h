@@ -8,11 +8,11 @@
 #include <matioCpp/matioCpp.h>
 #include <Eigen/Dense>
 
-class utility_substrate {
+class utility_substrate
+{
 
-    public:
-
-    static std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> read_mat_file(std::string &file);
+public:
+    static std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>> read_mat_file(std::string &file);
 
     static Eigen::MatrixXd vertex_conversion(matvar_t *field);
 
@@ -25,4 +25,4 @@ class utility_substrate {
     static Eigen::Vector3d rotate_y(const Eigen::Vector3d &position, double theta);
 };
 
-#endif //INC_3D_RANDOMWALK_UTILITY_SUBSTRATE_H
+#endif // INC_3D_RANDOMWALK_UTILITY_SUBSTRATE_H

@@ -4,16 +4,12 @@
 
 #include "utility_substrate.h"
 #include <iostream>
-#include <boost/filesystem.hpp>
 
-std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> utility_substrate::read_mat_file(std::string &file)
+std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>> utility_substrate::read_mat_file(std::string &file)
 {
     // Vertices and
     std::vector<Eigen::MatrixXd> vertices;
-    std::vector<Eigen::MatrixXd> faces;    
-
-    std::cout << "Current directory is " << boost::filesystem::current_path() << std::endl;
-
+    std::vector<Eigen::MatrixXd> faces;
 
     // Compile the full path
     std::string fullpath = file;
@@ -25,7 +21,8 @@ std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> utility_sub
 
     matVar = Mat_VarReadInfo(geometry, "myocytes");
 
-    if (matVar){ // If the variable exist
+    if (matVar)
+    { // If the variable exist
 
         // Number of myocytes
         int N_m = matVar->dims[1];
@@ -34,35 +31,40 @@ std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> utility_sub
         faces.resize(N_m);
 
         // Looping through all myocytes to retrieve vertices and faces
-        for (int i = 0; i < N_m; i++){
+        for (int i = 0; i < N_m; i++)
+        {
             vertex = Mat_VarGetStructFieldByName(matVar, "Vertices", i);
             face = Mat_VarGetStructFieldByName(matVar, "Faces", i);
-        
+
             // Reading vertices
             bool vertex_read_error = Mat_VarReadDataAll(geometry, vertex);
-            if (not(vertex_read_error)){
+            if (not(vertex_read_error))
+            {
                 vertices[i] = utility_substrate::vertex_conversion(vertex);
             }
-            else{
+            else
+            {
                 printf("read_myocytes::unable to read vertex");
                 break;
             }
 
             // Reading Faces
             bool face_read_error = Mat_VarReadDataAll(geometry, face);
-            if (not(face_read_error)){
+            if (not(face_read_error))
+            {
                 faces[i] = utility_substrate::face_conversion(face);
             }
-            else{
+            else
+            {
                 printf("read_myocytes::unable to read face");
                 break;
             }
-
         }
-            // myocytes file has been successfully loaded
-            bool flag = true;
+        // myocytes file has been successfully loaded
+        bool flag = true;
     }
-    else{
+    else
+    {
         printf("read_myocytes::non existent variable, please check your .mat file\n");
     }
 
@@ -70,59 +72,64 @@ std::pair<std::vector<Eigen::MatrixXd>,std::vector<Eigen::MatrixXd>> utility_sub
     return std::make_pair(vertices, faces);
 }
 
-
-Eigen::MatrixXd utility_substrate::vertex_conversion(matvar_t *field){
+Eigen::MatrixXd utility_substrate::vertex_conversion(matvar_t *field)
+{
 
     Eigen::MatrixXd output;
     int rows, cols;
     unsigned field_size;
-    const double *Data = static_cast<const double*>(field->data) ;
-
+    const double *Data = static_cast<const double *>(field->data);
 
     // Specify the matrix
-    if (field->rank==2){
+    if (field->rank == 2)
+    {
         rows = field->dims[0];
         cols = field->dims[1];
         field_size = field->nbytes / field->data_size;
 
         output.resize(rows, cols);
-        for (int j = 0; j < cols; j++){
-            for (int i = 0; i < rows; i++){
-                output(i, j) = Data[rows*j + i];
+        for (int j = 0; j < cols; j++)
+        {
+            for (int i = 0; i < rows; i++)
+            {
+                output(i, j) = Data[rows * j + i];
             }
         }
-
     }
-    else{
+    else
+    {
         printf("Matrix rank not equal to 2");
     }
 
     return output;
 }
 
-Eigen::MatrixXd utility_substrate::face_conversion(matvar_t *field){
+Eigen::MatrixXd utility_substrate::face_conversion(matvar_t *field)
+{
 
     Eigen::MatrixXd output;
     int rows, cols;
     unsigned field_size;
-    const uint16_t *Data = static_cast<const uint16_t*>(field->data) ;
-
+    const uint16_t *Data = static_cast<const uint16_t *>(field->data);
 
     // Specify the matrix
-    if (field->rank==2){
+    if (field->rank == 2)
+    {
         rows = field->dims[0];
         cols = field->dims[1];
         field_size = field->nbytes / field->data_size;
 
         output.resize(rows, cols);
-        for (int j = 0; j < cols; j++){
-            for (int i = 0; i < rows; i++){
-                output(i, j) = Data[rows*j + i];
+        for (int j = 0; j < cols; j++)
+        {
+            for (int i = 0; i < rows; i++)
+            {
+                output(i, j) = Data[rows * j + i];
             }
         }
-
     }
-    else{
+    else
+    {
         printf("Matrix rank not equal to 2");
     }
 
@@ -131,10 +138,9 @@ Eigen::MatrixXd utility_substrate::face_conversion(matvar_t *field){
 
 double utility_substrate::mod(double a, double b)
 {
-    int r = std::fmod(a,b);
+    double r = std::fmod(a, b);
     return r < 0 ? r + b : r;
 }
-
 
 double utility_substrate::find_yslice(double y_global, const Eigen::MatrixXd &y_slice_minmax)
 {
@@ -150,18 +156,19 @@ double utility_substrate::find_yslice(double y_global, const Eigen::MatrixXd &y_
     }
 
     // Lost particle (Does not happen very often)
-    if (not(found))
+    if (!found)
     {
         throw std::logic_error("Transform::find_yslice::where', 'Corresponding slice not found'");
-        return -1;
     }
+    return -1;
 }
 
-Eigen::Vector3d utility_substrate::rotate_y(const Eigen::Vector3d &position, double theta){
+Eigen::Vector3d utility_substrate::rotate_y(const Eigen::Vector3d &position, double theta)
+{
     Eigen::Matrix3d rotation = Eigen::Matrix3d::Zero(3, 3);
     rotation << std::cos(theta), 0, std::sin(theta),
-                 0, 1, 0,
-                -std::sin(theta), 0, std::cos(theta);
-    
-    return rotation*position;
+        0, 1, 0,
+        -std::sin(theta), 0, std::cos(theta);
+
+    return rotation * position;
 }
