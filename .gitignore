@@ -1,5 +1,4 @@
 cmake-build-debug/
-third_party/
 build/
 .vscode/
 .idea/
