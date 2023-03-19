@@ -12,7 +12,8 @@
 
 TEST_CASE("Set substrate", "[substrate]")
 {
-    std::string file = "/Users/ia4118/CLionProjects/3D_RandomWalk/testing/data/geometry_1.mat";
+    //TODO use boost to obtain path to data
+    std::string file = "/Users/ia4118/CLionProjects/3DRandomWalk/testing/data/geometry_1.mat";
     std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::MatrixXd>> myo = utility_substrate::read_mat_file(file);
     substrate sub(myo.first, myo.second);
 

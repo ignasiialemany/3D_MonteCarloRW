@@ -9,9 +9,11 @@ polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
     // Create a bounding box from min max vertices
     Kernel::Point_3 min_point = Kernel::Point_3(vertices.col(0).minCoeff(), vertices.col(1).minCoeff(), vertices.col(2).minCoeff());
     Kernel::Point_3 max_point = Kernel::Point_3(vertices.col(0).maxCoeff(), vertices.col(1).maxCoeff(), vertices.col(2).maxCoeff());
-    //createBbox(min_point, max_point);
+    // createBbox(min_point, max_point);
     createPolygon(vertices, faces);
-    _solid_bbox = CGAL::Bbox_3(min_point.x(), min_point.y(), min_point.z(), max_point.x(), max_point.y(), max_point.z());
+    _solid_bbox = CGAL::Bbox_3(CGAL::to_double(min_point.x()), CGAL::to_double(min_point.y()), CGAL::to_double(min_point.z()),
+                               CGAL::to_double(max_point.x()), CGAL::to_double(max_point.y()), CGAL::to_double(max_point.z()));
+
     _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
 }
 
@@ -50,84 +52,7 @@ double polygon::computeSurface()
     }
     return surface_area;
 }
-/*
-boost::variant<bool, std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step)
-{
-    // Define a segment that starts at point and finishes at step+point;
-    CGAL::Segment_3<Kernel> segment(CGAL::Point_3<Kernel>(point(0), point(1), point(2)), CGAL::Point_3<Kernel>(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
 
-    double min_distance = std::numeric_limits<double>::max();
-    int min_index = -1;
-    int n_intersections = 0;
-
-    // Check if the segment intersects any of the faces
-    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
-    {
-        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
-        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
-        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
-        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
-        CGAL::Triangle_3<Kernel> triangle(p1, p2, p3);
-        boost::optional<boost::variant<CGAL::Point_3<Kernel>, CGAL::Segment_3<Kernel>>> intersection = CGAL::intersection(segment, triangle);
-
-        // If init point is right at the face
-        if (triangle.has_on(segment.source()))
-        {
-            continue;
-        }
-
-        // Check if intersection is type Segment_3 (is intersecting with edge) and return false as intersection is not certain
-        if (intersection && intersection->which() == 1)
-        {
-            return false;
-        }
-
-        // Check if intersection is type Point_3 and update min_distance and min_index
-        if (intersection && intersection->which() == 0)
-        {
-            n_intersections++;
-            CGAL::Point_3<Kernel> intersection_point;
-            if (CGAL::assign(intersection_point, *intersection))
-            {
-                double distance = CGAL::sqrt(CGAL::squared_distance(intersection_point, segment.source()));
-
-                // If the distance is 0, the intersection is the starting point of the segment, so return false
-                if (distance < 1e-8)
-                {
-                    return false;
-                }
-
-                // If the remaining step is also smaller than 1e-1, return false
-                if (CGAL::sqrt(segment.squared_length()) - distance < 1e-8)
-                {
-                    return false;
-                }
-
-                if (distance < min_distance)
-                {
-                    min_distance = distance;
-                    min_index = std::distance(_poly.facets_begin(), facet_it) + 1;
-                }
-            }
-        }
-    }
-
-    if (n_intersections > 1)
-    {
-        // TODO: Remove this warning if it is not needed
-        std::cout << "WARNING: More than one intersection found." << std::endl;
-    }
-
-    // If no intersection is found, return false
-    if (min_distance == std::numeric_limits<double>::max())
-    {
-        return false;
-    }
-
-    // If an intersection is found, return the index of the face and the distance to the intersection
-    return std::pair<int, double>(min_index, min_distance);
-}
-*/
 boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
 {
     Kernel::Segment_3 segment(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Point_3(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
@@ -148,8 +73,10 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
         if (intersection.first.which() == 0)
         {
             Kernel::Point_3 point_intersected = boost::get<Kernel::Point_3>(intersection.first);
+            auto primitive = boost::get<Primitive>(intersection.second);
+            Kernel::Triangle_3 triangle = primitive.datum();
             double distance = CGAL::sqrt(CGAL::squared_distance(point_intersected, segment.source()));
-            if (distance < min_distance && distance > 0)
+            if (distance < min_distance)
             {
                 auto iter = intersection.second.id();
                 min_index = (iter - triangle_faces.begin());
@@ -158,69 +85,25 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
         }
         else
         {
-            std::runtime_error("Intersection found with polygon but is a segment. The step is parallel to the face and lies within it");
+            throw std::runtime_error("Polygon::intersection -> Intersection found but segment is parallel and lies on face");
         }
     }
 
-    // If there is only one intersection, but it is right at the face. (min_distance is not updated because distance=0)
     if (min_distance == std::numeric_limits<double>::max())
     {
-        throw std::runtime_error("Intersection found but the point is exactly on the face.");
+        throw std::runtime_error("Polygon: Intersection error.");
     }
-    // If is too close to face or the remaining step is too short
     // TODO: Unify epsilon values in the code
-    if (min_distance < 1e-8 || CGAL::sqrt(segment.squared_length()) - min_distance < 1e-8)
+    double t = min_distance / step.norm();
+
+    if ((1 - t) < 1e-6)
     {
-        throw std::runtime_error("Intersection found but the point is too close to the face or the remaining step is too short.");
+        throw std::runtime_error("Polygon::intersection -> Remaining step is too short, might be uncertain");
     }
 
     return std::pair<int, double>(min_index, min_distance);
 }
 
-/*
-bool polygon::containsPoint(const Eigen::Vector3d &point)
-{
-    // Check if point is within min and max of the bounding box
-    if (_bbox.xmin() > point(0) || _bbox.xmax() < point(0) || _bbox.ymin() > point(1) || _bbox.ymax() < point(1) || _bbox.zmin() > point(2) || _bbox.zmax() < point(2))
-    {
-        return false;
-    }
-
-    // Define a ray that starts at the point and goes in the positive x direction
-    CGAL::Ray_3<Kernel> ray(CGAL::Point_3<Kernel>(point(0), point(1), point(2)), CGAL::Vector_3<Kernel>(1, 0, 0));
-    int intersection_count = 0;
-
-    // Check if the point lies on any of the faces
-    CGAL::Point_3<Kernel> origin(point(0), point(1), point(2));
-    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
-    {
-        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
-        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
-        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
-        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
-        CGAL::Triangle_3<Kernel> triangle(p1, p2, p3);
-        if (triangle.has_on(origin))
-        {
-            return true;
-        }
-    }
-
-    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
-    {
-        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
-        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
-        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
-        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
-        CGAL::Triangle_3<Kernel> triangle(p1, p2, p3);
-        boost::optional<boost::variant<CGAL::Point_3<Kernel>, CGAL::Segment_3<Kernel>>> intersection = CGAL::intersection(ray, triangle);
-        if (intersection)
-        {
-            intersection_count++;
-        }
-    }
-    return (intersection_count % 2) == 1;
-}
-*/
 bool polygon::containsPoint(const Eigen::Vector3d &point) const
 {
     if (_solid_bbox.xmin() > point(0) || _solid_bbox.xmax() < point(0) || _solid_bbox.ymin() > point(1) ||
@@ -261,10 +144,11 @@ Eigen::Vector3d polygon::getNormalVector(int index_face) const
 
     // Obtain the normal vector from Kernel::Triangle_3
     Kernel::Vector_3 normal_vector = triangle.supporting_plane().orthogonal_vector();
+    // Obtain norm of normal_vector in double
     normal_vector = normal_vector / CGAL::sqrt(normal_vector.squared_length());
 
     // Transform to Eigen
-    Eigen::Vector3d normal_vector_eigen(normal_vector.x(), normal_vector.y(), normal_vector.z());
+    Eigen::Vector3d normal_vector_eigen(CGAL::to_double(normal_vector.x()), CGAL::to_double(normal_vector.y()), CGAL::to_double(normal_vector.z()));
 
     return normal_vector_eigen;
 }
@@ -307,7 +191,7 @@ void polygon::createPolygon(const Eigen::MatrixXd &vertices, const Eigen::Matrix
     B.end_surface();
 }
 
-//TODO: move this function to utility class, same is applied to transform.cpp
+// TODO: move this function to utility class, same is applied to transform.cpp
 void polygon::createBbox(Kernel::Point_3 min_point, Kernel::Point_3 max_point)
 {
 

@@ -89,9 +89,9 @@ boost::optional<double> substrate::intersectionBlock(const Eigen::Vector3d &poin
     CGAL::Segment_3<Kernel> segment(p1, p2);
 
     // Check if point p2 is inside the solid_box without the boundaries
-    if (p2.x() > solid_box.xmin() && p2.x() < solid_box.xmax() &&
-        p2.y() > solid_box.ymin() && p2.y() < solid_box.ymax() &&
-        p2.z() > solid_box.zmin() && p2.z() < solid_box.zmax())
+    if (p2.x() >= solid_box.xmin() && p2.x() <= solid_box.xmax() &&
+        p2.y() >= solid_box.ymin() && p2.y() <= solid_box.ymax() &&
+        p2.z() >= solid_box.zmin() && p2.z() <= solid_box.zmax())
     {
         return boost::optional<double>();
     }
@@ -103,13 +103,9 @@ boost::optional<double> substrate::intersectionBlock(const Eigen::Vector3d &poin
     // No intersection found
     if (intersections.size() == 0)
     {
-        std::cout << "No intersection found but point p2 is outside the solid_box" << std::endl;
-        return boost::optional<double>();
-    }
-
-    if (intersections.size() > 1)
-    {
-        throw std::runtime_error("More than 2 intersections found in the block.");
+        throw std::runtime_error("Substrate::intersectionBlock -> No intersection found but segment.target() is outside block");
+        // std::cout << "No intersection found but point p2 is outside the solid_box" << std::endl;
+        // return boost::optional<double>();
     }
 
     for (const auto &intersection : intersections)
@@ -119,15 +115,24 @@ boost::optional<double> substrate::intersectionBlock(const Eigen::Vector3d &poin
         {
             Kernel::Point_3 point_intersected = boost::get<Kernel::Point_3>(intersection.first);
             double distance = CGAL::sqrt(CGAL::squared_distance(point_intersected, segment.source()));
-            return distance;
+            if (distance < min_distance)
+            {
+                min_distance = distance;
+            }
         }
         else
         {
-            throw std::runtime_error("Intersection found but the segment is parallel to a face.");
+            throw std::runtime_error("Substrate::intersectionBlock -> Intersection found but segment is parallel and lies on face");
         }
     }
+    // TODO: Unify epsilon values in the code
+    double t = min_distance / CGAL::sqrt(segment.squared_length());
+    if ((1 - t) < 1e-6)
+    {
+        throw std::runtime_error("Substrate::intersectionBlock -> Remaining step is too short, might be uncertain");
+    }
 
-    return boost::optional<double>();
+    return min_distance;
 }
 
 int substrate::searchPolygon(const Eigen::Vector3d &point, const std::string &frameOfReference) const

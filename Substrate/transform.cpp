@@ -39,6 +39,12 @@ transform_info transform::global2local(const Eigen::Vector3d &global_position) c
 
         output.local_position << position_rotated(0) - ddxx, position_y_sliced, position_rotated(2) - ddzz;
 
+        // throw error if local_position is not within block
+        if (output.local_position(0) < 0 || output.local_position(0) > dx || output.local_position(1) < 0 || output.local_position(1) > dy || output.local_position(2) < 0 || output.local_position(2) > dz)
+        {
+            throw std::runtime_error("Transform::global2local -> Local position is not within block");
+        }
+
         return output;
     }
 }

@@ -36,13 +36,17 @@ public:
     boost::optional<std::tuple<int, double, Eigen::Vector3d>> intersectPolygon(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
     boost::optional<double> intersectionBlock(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
     int searchPolygon(const Eigen::Vector3d &point, const std::string &frameOfReference = "local") const;
-
+    Eigen::Vector3d get_block_size() const { return _transform.get_block_size(); };
+    void setVoxel(const Eigen::VectorXd &voxel) { _voxel = voxel; };
+    Eigen::VectorXd getVoxel() const { return _voxel; };
+    
 private:
     std::vector<polygon> _myocytes;
     std::vector<Kernel::Point_3> _points;
     transform _transform;
     std::unique_ptr<Tree> _tree;
     std::map<Kernel::Point_3, int> _map_centroid_to_polygon;
+    Eigen::VectorXd _voxel;
 };
 
 #endif // INC_3DRANDOMWALK_SUBSTRATE_H

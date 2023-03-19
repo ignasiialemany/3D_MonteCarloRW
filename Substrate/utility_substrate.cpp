@@ -148,7 +148,7 @@ double utility_substrate::find_yslice(double y_global, const Eigen::MatrixXd &y_
     bool found = false;
     for (int i = 0; i < y_slice_minmax.cols(); i++)
     {
-        if (y_global > y_slice_minmax(0, i) and y_global < y_slice_minmax(1, i))
+        if (y_global >= y_slice_minmax(0, i) and y_global < y_slice_minmax(1, i))
         {
             found = true;
             return y_slice_minmax(0, i);

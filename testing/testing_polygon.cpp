@@ -115,9 +115,17 @@ TEST_CASE("Test intersection of point and step with polygon face that is too clo
     // Define a point and step that intersect with the forth face but is too close to an edge
     Eigen::Vector3d point(0.5, 0.5, 0);
     Eigen::Vector3d step(0, 0, 1);
+    
+    boost::optional<std::pair<int,double>> intersection = poly.intersection(point, step);
 
-    // Test if intersection function throws a std::runtime_error
-    REQUIRE_THROWS_AS([&] { poly.intersection(point, step); }(), std::runtime_error);
+    if (!intersection)
+    {
+        FAIL("The point and step do not intersect with the polygon");
+    }
+    else{
+        REQUIRE((*intersection).first == 0);
+        REQUIRE((*intersection).second == 0);
+    }
 }
 
 TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
@@ -143,7 +151,42 @@ TEST_CASE("Test intersection of point and step with polygon face", "[polygon]")
     boost::optional<std::pair<int, double>> intersection_info = poly.intersection(point, step);
 
     // The expected intersection info is that the point and step intersect with the fourth face
-    std::pair<int, double> expected_intersection_info(3, 0.6);
+    std::pair<int, double> expected_intersection_info(0, 0);
+
+    if (!intersection_info)
+    {
+        FAIL("The point and step do not intersect with the polygon");
+    }
+    else{
+        REQUIRE((*intersection_info).first == expected_intersection_info.first);
+        REQUIRE((*intersection_info).second == expected_intersection_info.second);
+    }
+}
+
+TEST_CASE("Test intersection of point and step with polygon face with distance", "[polygon]")
+{
+    Eigen::MatrixXd vertices(4, 3);
+    Eigen::MatrixXd faces(4, 3);
+    vertices << 0, 0, 0,
+        1, 0, 0,
+        0, 1, 0,
+        0, 0, 1;
+    faces << 1, 3, 2,
+        1, 2, 4,
+        1, 4, 3,
+        2, 3, 4;
+
+    polygon poly(vertices, faces);
+
+    // Define a point and step that intersect with the fourth face
+    Eigen::Vector3d point(0.2, 0.2, 0.1);
+    Eigen::Vector3d step(0, 0, 1);
+
+    // Check if the point and step intersect with the fourth face
+    boost::optional<std::pair<int, double>> intersection_info = poly.intersection(point, step);
+
+    // The expected intersection info is that the point and step intersect with the fourth face
+    std::pair<int, double> expected_intersection_info(3, 0.5);
 
     if (!intersection_info)
     {

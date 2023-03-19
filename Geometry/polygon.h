@@ -23,7 +23,6 @@
 #include <CGAL/AABB_tree.h>
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_triangle_primitive.h>
-#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Object.h>
 #include <memory>
 
@@ -33,8 +32,8 @@ typedef Polyhedron::HalfedgeDS HalfedgeDS;
 
 // Define the AABB traits
 typedef std::vector<Kernel::Triangle_3>::iterator Iterator;
-typedef CGAL::AABB_triangle_primitive<CGAL::Simple_cartesian<double>, Iterator> Primitive;
-typedef CGAL::AABB_traits<CGAL::Simple_cartesian<double>, Primitive> AABB_triangle_traits;
+typedef CGAL::AABB_triangle_primitive<Kernel, Iterator> Primitive;
+typedef CGAL::AABB_traits<Kernel, Primitive> AABB_triangle_traits;
 typedef CGAL::AABB_tree<AABB_triangle_traits> Tree_AABB;
 
 class polygon

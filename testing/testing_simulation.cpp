@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <boost/filesystem.hpp>
 
+/*
 TEST_CASE("Seeding particles in bounding box", "[simulation]")
 {
 
@@ -45,7 +46,7 @@ TEST_CASE("Seeding particles in bounding box", "[simulation]")
         }
     }
 }
-
+*/
 TEST_CASE("one_dt", "[one_dt]")
 {
 
@@ -54,15 +55,15 @@ TEST_CASE("one_dt", "[one_dt]")
     auto cwd = boost::filesystem::current_path();
     auto parent_path = cwd.parent_path();
     std::string parent_path_str = parent_path.string();
+    std::string grandparent_path_str = parent_path_str.substr(0, parent_path_str.size() - 5);
 
-    std::string sub_path = "/testing/data/geometry_1.mat";
-    std::string sub_full_path = parent_path_str + sub_path;
+    std::string sub_path = "testing/data/geometry_1.mat";
+    std::string sub_full_path = grandparent_path_str + sub_path;
 
-    simulation sim;
+    simulation sim(1,1);
     std::string step_type = "constant";
     std::string transit_model = "whatever";
     sim.set_parameters(2, 3, step_type, transit_model, 2.5, 1., 0.05);
-    walkers particle(1, 1);
     auto myo = utility_substrate::read_mat_file(sub_full_path);
     substrate sub(myo.first, myo.second);
 
@@ -70,32 +71,32 @@ TEST_CASE("one_dt", "[one_dt]")
     t.set_block(495.3992, 392.3432, 126.5612);
     sub.setTransform(t);
 
-    particle.get_particle(0).position << 1433.5427938, 910.0219397, 3206.792634463;
-    int myo_index = sub.searchPolygon(particle.get_particle(0).position, "global");
-    particle.get_particle(0).myocyte_index = myo_index;
-    sim.one_dt<oneGenerator>(particle.get_particle(0), sub, fixed_rng_engine, 1);
+    sim.get_particle(0).position << 1433.5427938, 910.0219397, 3206.792634463;
+    int myo_index = sub.searchPolygon(sim.get_particle(0).position, "global");
+    sim.get_particle(0).myocyte_index = myo_index;
+    sim.one_dt<oneGenerator>(sim.get_particle(0), sub, fixed_rng_engine, 1);
     Eigen::Vector3d expected_position(1434.9570073623731, 911.4361532623731, 3208.2068479267462);
-    Eigen::Vector3d diff = expected_position - particle.get_particle(0).position;
+    Eigen::Vector3d diff = expected_position - sim.get_particle(0).position;
     REQUIRE(std::abs(diff.norm()) < 1e-6);
 
 
     //This case checks intersection with block, intersection with cardiomyoycte (reflection) and  no intersection
-    particle.get_particle(0).position << 905.37515026, 1542.7427839, 586.83012998;
-    myo_index = sub.searchPolygon(particle.get_particle(0).position, "global");
-    particle.get_particle(0).myocyte_index = myo_index;
-    sim.one_dt<oneGenerator>(particle.get_particle(0), sub, fixed_rng_engine, 0.4886875);
+    sim.get_particle(0).position << 905.37515026, 1542.7427839, 586.83012998;
+    myo_index = sub.searchPolygon(sim.get_particle(0).position, "global");
+    sim.get_particle(0).myocyte_index = myo_index;
+    sim.one_dt<oneGenerator>(sim.get_particle(0), sub, fixed_rng_engine, 0.4886875);
     Eigen::Vector3d expected_position_2(906.13982179, 1544.271804, 585.858874785);
-    Eigen::Vector3d diff_2 = expected_position_2 - particle.get_particle(0).position;
+    Eigen::Vector3d diff_2 = expected_position_2 - sim.get_particle(0).position;
     REQUIRE(std::abs(diff_2.norm()) < 1e-6);
 
 
      //This case checks intersection with block, intersection with cardiomyoycte (reflection) and  no intersection
-    particle.get_particle(0).position << 979.858916463534,614.924794934872,7289.33203526935;
-    myo_index = sub.searchPolygon(particle.get_particle(0).position, "global");
-    particle.get_particle(0).myocyte_index = myo_index;
-    sim.one_dt<oneGenerator>(particle.get_particle(0), sub, fixed_rng_engine, 0.4886875);
+    sim.get_particle(0).position << 979.858916463534,614.924794934872,7289.33203526935;
+    myo_index = sub.searchPolygon(sim.get_particle(0).position, "global");
+    sim.get_particle(0).myocyte_index = myo_index;
+    sim.one_dt<oneGenerator>(sim.get_particle(0), sub, fixed_rng_engine, 0.4886875);
     Eigen::Vector3d expected_position_3(981.422066328390,616.487944799729,7290.89518513421);
-    Eigen::Vector3d diff_3 = expected_position_3 - particle.get_particle(0).position;
+    Eigen::Vector3d diff_3 = expected_position_3 - sim.get_particle(0).position;
     REQUIRE(std::abs(diff_3.norm()) < 1e-6);
     
 

@@ -30,12 +30,13 @@ public:
     CGAL::Bbox_3 get_solid_block()const {return _solid_block;};
     Polyhedron get_block()const {return _block;};
     std::shared_ptr<Tree_AABB> get_AABBtree()const {return _AABBtree;};
+    Eigen::Vector3d get_block_size()const {return Eigen::Vector3d(dx,dy,dz);};
 
 private:
 
     void create_block(Kernel::Point_3 min_point, Kernel::Point_3 max_point);
+    double deg_rot_per_m_in_Y = 0.01;
     bool shift_block = true;
-    double deg_rot_per_m_in_Y = 0.;
     double dx,dy,dz;
     bool isIdentity;
     std::vector<Kernel::Triangle_3> triangles;

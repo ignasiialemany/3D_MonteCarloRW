@@ -5,17 +5,13 @@
 #include "simulation.h"
 #include <typeinfo>
 
-simulation::simulation(const walkers &particles_input)
+bool simulation::seedParticlesInBox(const substrate &substrate)
 {
-    _particles = particles_input;
-}
-
-bool simulation::seedParticlesInBox(const Eigen::VectorXd &bounding_box)
-{
+    Eigen::VectorXd voxel_boundingbox = substrate.getVoxel();
     // Number of boxes
     try
     {
-        checkBoundingBox(bounding_box);
+        checkBoundingBox(voxel_boundingbox);
     }
     catch (const std::runtime_error &e)
     {
@@ -24,7 +20,7 @@ bool simulation::seedParticlesInBox(const Eigen::VectorXd &bounding_box)
 
     // TODO: Implement 2D logic in seeding max_point==min_point the code works for 2D,1D boxes
     // Seeding particles in bounding box
-    seeding(bounding_box);
+    seeding(voxel_boundingbox);
     return true;
 }
 
@@ -44,33 +40,58 @@ boost::variant<bool, std::runtime_error> simulation::checkBoundingBox(const Eige
 
 void simulation::seeding(const Eigen::VectorXd &box)
 {
-    Eigen::MatrixXd initial_positions(_particles.get_number_of_particles(), 3);
+    Eigen::MatrixXd initial_positions(_particles->get_number_of_particles(), 3);
     // Specifically for the seeding we will use the general seed as well
-    std::mt19937 seeding(_particles.get_global_seed());
+    std::mt19937 seeding(_particles->get_global_seed());
     std::uniform_real_distribution<> x_interval(box(0), box(1));
     std::uniform_real_distribution<> y_interval(box(2), box(3));
     std::uniform_real_distribution<> z_interval(box(4), box(5));
-    for (int i = 0; i < _particles.get_number_of_particles(); i++)
+    for (int i = 0; i < _particles->get_number_of_particles(); i++)
     {
-        Particle &particle = _particles.get_particle(i);
+        Particle &particle = _particles->get_particle(i);
         particle.position(0) = x_interval(seeding);
         particle.position(1) = y_interval(seeding);
         particle.position(2) = z_interval(seeding);
     }
 }
 
+void simulation::writeToFile(Particle &particle)
+{
+    // Add particle.position, particle.myocyte_index, particle.seed, particle.index
+    std::string text = std::to_string(particle.position(0)) + "," + std::to_string(particle.position(1)) + "," + std::to_string(particle.position(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "," + std::to_string(particle.myocyte_index) + "\n";
+    particle.file.write(text);
+}
+
 void simulation::performScan(const substrate &substrate, const sequence &sequence)
 {
-#pragma omp parallel num_threads(_params.cores) default(none) shared(_particles, _params, substrate, sequence)
+    int completed_particles = 0;
+#pragma omp parallel num_threads(_params.cores) default(none) shared(_particles, _params, substrate, sequence, std::cout, completed_particles)
     {
 #pragma omp for
-        for (int index_particle = 0; index_particle < _particles.get_number_of_particles(); index_particle++)
+        for (int index_particle = 0; index_particle < _particles->get_number_of_particles(); index_particle++)
         {
-            Particle &particle = _particles.get_particle(index_particle);
-            one_walker(particle, substrate, sequence);
+            Particle &particle = _particles->get_particle(index_particle);
+            particle.index = index_particle;
+            try
+            {
+                one_walker(particle, substrate, sequence);
+            }
+            catch (const std::exception &ex)
+            {
+#pragma omp critical
+                std::cout << "Fatal error : " << index_particle << ": " << ex.what() << std::endl;
+            }
+#pragma omp critical
+            completed_particles++;
+            if (index_particle % 300 == 0)
+            {
+                double percentage = 100 * (double)completed_particles / (double)_particles->get_number_of_particles();
+                std::cout << "Completed " << percentage << "% of particles" << std::endl;
+            }
         }
     }
 #pragma omp barrier
+        std::cout << "Simulation finished" << std::endl;
 }
 
 void simulation::one_walker(Particle &particle, const substrate &substrate, const sequence &sequence)
@@ -84,10 +105,14 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
         double dt_magnitude = sequence.dt(i);
         double dG_magnitude = sequence.gG(i);
         // TODO: Calculate phase from dG and dT and position
-
+        // if (i==4711){
+        //  std::cout << particle.position << std::endl;
+        // }
+        particle.phase = particle.phase + (dG_magnitude * dt_magnitude) * particle.position;
         // Initialize counter and flags
         int counter = 0;
         bool step_success = false;
+
         while (!step_success)
         {
             counter++;
@@ -99,23 +124,33 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
 
             try
             {
+
                 // TODO: Probably delete sequence input from one_dt
                 one_dt(particle, substrate, rng_engine, dt_magnitude);
+                // writeToFile(particle);
                 step_success = true;
             }
             catch (const std::exception &ex)
             {
-                // If it is a std::logic_error break the loop it means it has tried one_dt for 50 times
                 if (typeid(ex) == typeid(std::logic_error))
                 {
+                    // TODO: Implement more logic errors in functions
                     particle.flag = 2;
-                    std::cout << ex.what() << std::endl;
+                    std::cout << "Particle Index" << particle.index << " " << ex.what() << std::endl;
+                    std::cout << "Time step :" << i << std::endl;
                     break;
                 }
                 else
                 {
-                    std::cout << ex.what() << std::endl;
-                    continue;
+                    std::cout << "Particle Index" << particle.index << " " << ex.what() << std::endl;
+                    std::string errorMessage = ex.what();
+                    if (errorMessage.find("Transform") != std::string::npos)
+                    {
+                        // The particle local position lays very close to the block (epsilon value), just move a bit
+                        particle.position = particle.position + Eigen::Vector3d::Constant(1e-6);
+                        // Runtime error is in intersection, just repeat one_dt with another step
+                        continue;
+                    }
                 }
             }
         }
@@ -180,7 +215,7 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
     step = step * std::sqrt(2 * dt_magnitude * D_coeff_old);
 
     // Get variables for Transit Model (TODO: Maybe transit model as a _params enumerator or class?)
-    double probability_of_transit, ds, term, D_low, l_low, p_fieremans, p_maruyama;
+    double probability_of_transit, term, D_low, l_low, p_fieremans, p_maruyama;
 
     int counter = 0;
     // TODO: Unify convergence epsilon in class, maybe simulation parameter?
@@ -188,12 +223,16 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
 
     while (step.norm() > convergence_eps)
     {
+        // std::cout << step.norm() << std::endl;
+
         D_coeff_old = D_coeff_new;
-
-        // Throw logic_error if we we try to intersect more than 50 times
+        counter++;
+        // std::cout << "Counter: " << counter << std::endl;
+        //  Throw logic_error if we we try to intersect more than 50 times
         if (counter > 50)
+        {
             throw std::logic_error("Stepping error, stopped while loop in one_dt after trying 50 times");
-
+        }
         // Get transform and local position/step
         transform_info transform_data = substrate.getLocalFromGlobal(particle.position);
         Eigen::Vector3d local_position = transform_data.local_position;

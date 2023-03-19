@@ -11,6 +11,7 @@
 #include <boost/variant.hpp>
 #include <omp.h>
 #include "../testing/oneGenerator.h"
+#include <memory>
 
 struct parameters
 {
@@ -27,14 +28,12 @@ class simulation
 {
 
 public:
-    simulation() = default;
-    explicit simulation(const walkers &particles_input);
-    // Copy constructor
-    simulation(const simulation &other)
-    {
-        this->_particles = other._particles;
-    }
 
+    simulation():_particles(nullptr){};
+
+    simulation(int N_p, int seed) : _particles(std::make_shared<walkers>(N_p,seed)){};
+
+    simulation(const simulation &other) : _particles(other._particles){};
     // returning *this allows for chaining assignment operations
     simulation &operator=(const simulation &other)
     {
@@ -46,10 +45,11 @@ public:
         }
         return *this;
     }
-    bool seedParticlesInBox(const Eigen::VectorXd &boundingbox);
-    walkers getParticles() { return _particles; };
-    void performScan(const substrate &substrate, const sequence &sequence);
 
+    bool seedParticlesInBox(const substrate &substrate);
+    void performScan(const substrate &substrate, const sequence &sequence);
+    void writeParticlesState(const std::string &file_path){_particles->writeParameters(file_path);};
+    Particle& get_particle(int i){return _particles->get_particle(i);};
     template <typename URNG>
     void one_dt(Particle &particle, const substrate &substrate, URNG &rng_engine, double dt);
 
@@ -57,14 +57,13 @@ public:
     void set_parameters(int cores, int dimension, std::string &step_type, std::string &transit_model, double D_ecs, double D_ics, double kappa);
 
 private:
-    walkers _particles;
+    std::shared_ptr<walkers> _particles;
     parameters _params;
     static boost::variant<bool, std::runtime_error> checkBoundingBox(const Eigen::VectorXd &box);
     void seeding(const Eigen::VectorXd &box);
-
+    void writeToFile(Particle &particle);
     template <typename URNG>
     static Eigen::Vector3d getStep(URNG &rng_engine, int dimension, std::string step_type);
-
     double max_step = 5;
 };
 

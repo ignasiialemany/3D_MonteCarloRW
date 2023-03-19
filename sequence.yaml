@@ -26,5 +26,5 @@ sequence:
   N_t: 100
   # time step limit [dt_free, dt_grad]
   dt_max:
-    - 0.01 # during gradient-off (free)
-    - 0.01 # during gradient-on
+    - 0.0065 # during gradient-off (free)
+    - 0.0065 # during gradient-on
