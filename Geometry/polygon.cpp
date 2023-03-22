@@ -3,18 +3,51 @@
 //
 
 #include "polygon.h"
+#include <CGAL/enum.h>
 
 polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
 {
     // Create a bounding box from min max vertices
-    Kernel::Point_3 min_point = Kernel::Point_3(vertices.col(0).minCoeff(), vertices.col(1).minCoeff(), vertices.col(2).minCoeff());
-    Kernel::Point_3 max_point = Kernel::Point_3(vertices.col(0).maxCoeff(), vertices.col(1).maxCoeff(), vertices.col(2).maxCoeff());
     // createBbox(min_point, max_point);
     createPolygon(vertices, faces);
-    _solid_bbox = CGAL::Bbox_3(CGAL::to_double(min_point.x()), CGAL::to_double(min_point.y()), CGAL::to_double(min_point.z()),
-                               CGAL::to_double(max_point.x()), CGAL::to_double(max_point.y()), CGAL::to_double(max_point.z()));
-
     _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
+    _solid_bbox = _AABBtree->bbox();
+}
+
+polygon::polygon(Polyhedron &poly)
+{
+    _poly = poly;
+    // Iterate over the Polyhedron_3 and push back Triangle_3 to triangle_faces
+    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
+    {
+        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
+        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
+        // create std::vector<std::size_t> for each face
+        triangle_faces.push_back(Kernel::Triangle_3(p1, p2, p3));
+    }
+    // Iterate over vertices and get min and max vertices
+    _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
+    _solid_bbox = _AABBtree->bbox();
+
+    // Fill in _vertices and _faces
+    for (Polyhedron::Vertex_iterator vertex_it = _poly.vertices_begin(); vertex_it != _poly.vertices_end(); ++vertex_it)
+    {
+        _vertices.push_back(vertex_it->point());
+    }
+
+    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
+    {
+        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
+        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
+        // create std::vector<std::size_t> for each face
+        _faces.push_back(std::vector<std::size_t>{(std::size_t)std::distance(_vertices.begin(), std::find(_vertices.begin(), _vertices.end(), p1)),
+                                                  (std::size_t)std::distance(_vertices.begin(), std::find(_vertices.begin(), _vertices.end(), p2)),
+                                                  (std::size_t)std::distance(_vertices.begin(), std::find(_vertices.begin(), _vertices.end(), p3))});
+    }
 }
 
 double polygon::computeVolume()
@@ -31,7 +64,7 @@ double polygon::computeVolume()
         Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
 
         // Compute the pyramid volume of p1,p2,p3,centroid
-        volume += CGAL::abs(CGAL::volume(p1, p2, p3, centroid));
+        // volume += CGAL::abs(CGAL::volume(p1, p2, p3, centroid));
     }
     return volume;
 }
@@ -48,7 +81,7 @@ double polygon::computeSurface()
         Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
         Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
 
-        surface_area += CGAL::sqrt(CGAL::squared_area(p1, p2, p3));
+        // surface_area += CGAL::sqrt(CGAL::squared_area(p1, p2, p3));
     }
     return surface_area;
 }
@@ -75,13 +108,36 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
             Kernel::Point_3 point_intersected = boost::get<Kernel::Point_3>(intersection.first);
             auto primitive = boost::get<Primitive>(intersection.second);
             Kernel::Triangle_3 triangle = primitive.datum();
-            double distance = CGAL::sqrt(CGAL::squared_distance(point_intersected, segment.source()));
+            // check point_intersected inside triangle
+            // if (triangle.has_on(point_intersected))
+            //{
+            Kernel::Segment_3 edge1(triangle.vertex(1), triangle.vertex(0));
+            Kernel::Segment_3 edge2(triangle.vertex(2), triangle.vertex(0));
+            Kernel::Segment_3 edge3(triangle.vertex(2), triangle.vertex(1));
+
+            double min_edge_distance = std::min(CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge1))), std::min(
+                                                                                                                                   CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge2))),
+                                                                                                                                   CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge3)))));
+
+            // Check if the point is too close to an edge
+            if (min_edge_distance < 1e-8)
+            {
+                throw std::runtime_error("Polygon::intersection -> Intersection found but point is too close to an edge, uncertain");
+            }
+
+            Kernel::FT squared_distance = CGAL::squared_distance(point_intersected, segment.source());
+            double distance = CGAL::sqrt(CGAL::to_double(squared_distance));
             if (distance < min_distance)
             {
                 auto iter = intersection.second.id();
                 min_index = (iter - triangle_faces.begin());
                 min_distance = distance;
             }
+            //}
+            // else
+            //{
+            //   throw std::runtime_error("Polygon::intersection -> Intersection found but point is not on face, uncertain");
+            //}
         }
         else
         {
@@ -94,13 +150,11 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
         throw std::runtime_error("Polygon: Intersection error.");
     }
     // TODO: Unify epsilon values in the code
-    double t = min_distance / step.norm();
-
-    if ((1 - t) < 1e-6)
+    double t = CGAL::to_double(min_distance) / step.norm();
+    if ((1 - t) < 1e-8 || t < 1e-8)
     {
         throw std::runtime_error("Polygon::intersection -> Remaining step is too short, might be uncertain");
     }
-
     return std::pair<int, double>(min_index, min_distance);
 }
 
@@ -126,7 +180,7 @@ bool polygon::containsPoint(const Eigen::Vector3d &point) const
             Primitive intersection_primitive = intersection.second;
             auto iter = intersection_primitive.id();
             int index = iter - triangle_faces.begin();
-            if (triangle_faces[index].has_on(point_intersected))
+            if (triangle_faces[index].has_on(ray.source()))
             {
                 return true;
             }
@@ -139,18 +193,81 @@ bool polygon::containsPoint(const Eigen::Vector3d &point) const
 
 Eigen::Vector3d polygon::getNormalVector(int index_face) const
 {
+    // Helper functions
+    auto is_counterclockwise_oriented = [](const Kernel::Triangle_3 &triangle)
+    {
+        if (triangle.is_degenerate())
+        {
+            throw std::runtime_error("Polygon::getNormalVector -> Triangle is degenerate");
+        }
+
+        const Kernel::Point_3 A = triangle.vertex(0);
+        const Kernel::Point_3 B = triangle.vertex(1);
+        const Kernel::Point_3 C = triangle.vertex(2);
+
+        Kernel::Vector_3 normal = CGAL::cross_product(B - A, C - A);
+        Kernel::Point_3 D = A + normal;
+
+        // Check if the triangle_3 is oriented counterclockwise
+        CGAL::Orientation orientation = CGAL::orientation(A, B, C, D);
+
+        return orientation == CGAL::POSITIVE;
+    };
+
+    auto opposite = [](const Kernel::Triangle_3 &triangle)
+    {
+        const Kernel::Point_3 A = triangle.vertex(0);
+        const Kernel::Point_3 B = triangle.vertex(1);
+        const Kernel::Point_3 C = triangle.vertex(2);
+        return Kernel::Triangle_3(A, C, B);
+    };
+
     // Obtain triangle from index
     Kernel::Triangle_3 triangle = triangle_faces[index_face];
 
+    auto isoriented = is_counterclockwise_oriented(triangle);
+    Kernel::Triangle_3 new_triangle = triangle;
+    if (!isoriented)
+    {
+        new_triangle = opposite(triangle);
+        bool is_new_oriented = is_counterclockwise_oriented(new_triangle);
+        if (!is_new_oriented)
+        {
+            throw std::runtime_error("Polygon::getNormalVector -> Triangle is not oriented");
+        }
+    }
+
     // Obtain the normal vector from Kernel::Triangle_3
-    Kernel::Vector_3 normal_vector = triangle.supporting_plane().orthogonal_vector();
+    Kernel::Vector_3 normal_vector = new_triangle.supporting_plane().orthogonal_vector();
+
+    double normal_vector_norm = CGAL::to_double(CGAL::sqrt(CGAL::to_double(normal_vector.squared_length())));
     // Obtain norm of normal_vector in double
-    normal_vector = normal_vector / CGAL::sqrt(normal_vector.squared_length());
+    normal_vector = normal_vector / normal_vector_norm;
 
     // Transform to Eigen
     Eigen::Vector3d normal_vector_eigen(CGAL::to_double(normal_vector.x()), CGAL::to_double(normal_vector.y()), CGAL::to_double(normal_vector.z()));
 
     return normal_vector_eigen;
+}
+
+bool polygon::isPolygonClosed()
+{
+    // Iterate over halfedges in _poly
+    for (auto he = _poly.halfedges_begin(); he != _poly.halfedges_end(); he++)
+    {
+        if (he->is_border())
+        {
+            // If the halfedge is a border, it can't have a twin
+            return false;
+        }
+        if (he->opposite() == nullptr)
+        {
+            // If the halfedge doesn't have a twin, the polyhedron is not closed
+            return false;
+        }
+    }
+    // If all halfedges have twins, the polyhedron is closed
+    return true;
 }
 
 void polygon::createPolygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
