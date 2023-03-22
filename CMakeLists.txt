@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
-#set(CMAKE_C_COMPILER "/opt/homebrew/opt/gcc/bin/gcc-12")
-#set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/gcc/bin/g++-12")
+set(CMAKE_C_COMPILER "/opt/homebrew/opt/gcc/bin/gcc-12")
+set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/gcc/bin/g++-12")
 set(CMAKE_CXX_STANDARD 14)
 project(3DRandomWalk)
 
-set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_BUILD_TYPE "Release")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Choose your desired optimization level and floating-point settings
     set(OPTIMIZATION_LEVEL "-O3") 
@@ -17,6 +17,8 @@ endif()
 
 add_subdirectory(third_party/yaml-cpp)
 add_subdirectory(third_party/Catch2-3.3.1)
+add_subdirectory(third_party/matio-cpp-master)
+
 
 # Set the name of the conda environment containing the required packages
 set(CONDA_ENV_NAME "native")
@@ -30,13 +32,10 @@ set(CONDA_LIBRARY_DIR "${CONDA_PREFIX}/lib")
 set(CMAKE_PREFIX_PATH ${CONDA_PREFIX} ${CMAKE_PREFIX_PATH})
 set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};${PROJECT_SOURCE_DIR}/third_party/yaml-cpp")
 
-
 find_package(Eigen3 3.3 REQUIRED)
 message(STATUS "Eigen3 found at: ${Eigen3_DIR}")
 
-find_package(yaml-cpp REQUIRED)
-
-find_package(CGAL REQUIRED)
+find_package(CGAL REQUIRED COMPONENTS Core)
 message(STATUS "cgal found at: ${CGAL_DIR}")
 
 find_package(Boost REQUIRED COMPONENTS filesystem system)
@@ -51,11 +50,17 @@ message(STATUS "Catch2 found at: ${Catch2_DIR}")
 find_package(matioCpp REQUIRED)
 message(STATUS "matioCpp found at: ${matioCpp_DIR}")
 
+find_package(Ceres REQUIRED)
+message(STATUS "Ceres found at: ${Ceres_DIR}")
+
 set(GEOMETRY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Geometry")
 set(SUBSTRATE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Substrate")
 set(MONTECARLO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/MonteCarlo")
 set(MRI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/MRI")
 set(UTILITY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Utility")
+
+include_directories(${CERES_INCLUDE_DIRS})
+include_directories(third_party/yaml-cpp/include)
 
 file(GLOB_RECURSE SOURCES "${GEOMETRY_DIR}/*.cpp" "${SUBSTRATE_DIR}/*.cpp" "${MONTECARLO_DIR}/*.cpp" "${MRI_DIR}/*.cpp" "${UTILITY_DIR}/*.cpp")
 file(GLOB_RECURSE HEADERS "${GEOMETRY_DIR}/*.h" "${SUBSTRATE_DIR}/*.h" "${MONTECARLO_DIR}/*.h" "${MRI_DIR}/*.h" "${UTILITY_DIR}/*.h")
@@ -65,5 +70,6 @@ add_executable(myTests testing/oneGenerator.h testing/testing_simulation.cpp tes
 add_executable(3DRandomWalk run_sim.cpp ${SOURCES} ${HEADERS})
 
 # Link against the yaml-cpp library
-target_link_libraries(3DRandomWalk Eigen3::Eigen Catch2::Catch2WithMain OpenMP::OpenMP_CXX ${Boost_LIBRARIES} CGAL::CGAL matioCpp::matioCpp Boost::filesystem Boost::system yaml-cpp)
-target_link_libraries(myTests Eigen3::Eigen Catch2::Catch2WithMain yaml-cpp OpenMP::OpenMP_CXX ${Boost_LIBRARIES} CGAL::CGAL matioCpp::matioCpp Boost::filesystem Boost::system)
+target_link_libraries(3DRandomWalk Eigen3::Eigen Catch2::Catch2WithMain OpenMP::OpenMP_CXX ${Boost_LIBRARIES} CGAL::CGAL matioCpp::matioCpp Boost::filesystem Boost::system yaml-cpp ${CERES_LIBRARIES})
+target_link_libraries(myTests Eigen3::Eigen Catch2::Catch2WithMain yaml-cpp OpenMP::OpenMP_CXX ${Boost_LIBRARIES} CGAL::CGAL matioCpp::matioCpp Boost::filesystem Boost::system ${CERES_LIBRARIES})
+target_compile_definitions(3DRandomWalk PRIVATE CGAL_PMP_USE_CERES_SOLVER )
