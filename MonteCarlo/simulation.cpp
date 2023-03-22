@@ -58,14 +58,19 @@ void simulation::seeding(const Eigen::VectorXd &box)
 void simulation::writeToFile(Particle &particle)
 {
     // Add particle.position, particle.myocyte_index, particle.seed, particle.index
-    std::string text = std::to_string(particle.position(0)) + "," + std::to_string(particle.position(1)) + "," + std::to_string(particle.position(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "," + std::to_string(particle.myocyte_index) + "\n";
+    std::string text = std::to_string(particle.position(0)) + "," + std::to_string(particle.position(1)) + "," + std::to_string(particle.position(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "," + std::to_string(particle.myocyte_index) + "," + std::to_string(particle.flag) + "\n";
     particle.file.write(text);
 }
 
 void simulation::performScan(const substrate &substrate, const sequence &sequence)
 {
+    if (params.isOutput)
+    {
+        _particles->initializeFiles();
+    }
+
     int completed_particles = 0;
-#pragma omp parallel num_threads(_params.cores) default(none) shared(_particles, _params, substrate, sequence, std::cout, completed_particles)
+#pragma omp parallel num_threads(params.cores) default(none) shared(_particles, params, substrate, sequence, std::cout, completed_particles)
     {
 #pragma omp for
         for (int index_particle = 0; index_particle < _particles->get_number_of_particles(); index_particle++)
@@ -91,12 +96,12 @@ void simulation::performScan(const substrate &substrate, const sequence &sequenc
         }
     }
 #pragma omp barrier
-        std::cout << "Simulation finished" << std::endl;
+    std::cout << "Simulation finished" << std::endl;
 }
 
 void simulation::one_walker(Particle &particle, const substrate &substrate, const sequence &sequence)
 {
-    particle.myocyte_index = substrate.searchPolygon(particle.position);
+    particle.myocyte_index = substrate.searchPolygon(particle.position, "global");
     std::mt19937 rng_engine(particle.seed);
 
     for (int i = 0; i < sequence.dt.size(); i++)
@@ -105,9 +110,6 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
         double dt_magnitude = sequence.dt(i);
         double dG_magnitude = sequence.gG(i);
         // TODO: Calculate phase from dG and dT and position
-        // if (i==4711){
-        //  std::cout << particle.position << std::endl;
-        // }
         particle.phase = particle.phase + (dG_magnitude * dt_magnitude) * particle.position;
         // Initialize counter and flags
         int counter = 0;
@@ -119,6 +121,7 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
             if (counter > 50)
             {
                 particle.flag = 2;
+                // std::cout << "Particle index COUNTER REACHED" << particle.index << " " << std::endl;
                 throw std::runtime_error("Runtime error: Stepping has stopped. Particle flagged");
             }
 
@@ -127,7 +130,10 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
 
                 // TODO: Probably delete sequence input from one_dt
                 one_dt(particle, substrate, rng_engine, dt_magnitude);
-                // writeToFile(particle);
+                if (params.isOutput)
+                {
+                    writeToFile(particle);
+                }
                 step_success = true;
             }
             catch (const std::exception &ex)
@@ -138,7 +144,7 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
                     particle.flag = 2;
                     std::cout << "Particle Index" << particle.index << " " << ex.what() << std::endl;
                     std::cout << "Time step :" << i << std::endl;
-                    break;
+                    return;
                 }
                 else
                 {
@@ -190,42 +196,58 @@ Eigen::Vector3d simulation::getStep(URNG &rng_engine, int dimension, std::string
     return step;
 }
 
-void simulation::set_parameters(int cores, int dimension, std::string &step_type, std::string &transit_model, double D_ecs, double D_ics, double kappa)
-{
-    _params.cores = cores;
-    _params.dimension = dimension;
-    _params.step_type = step_type;
-    _params.transit_model = transit_model;
-    _params.D_ecs = D_ecs;
-    _params.D_ics = D_ics;
-    _params.kappa = kappa;
-}
-
 template <typename URNG>
 void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rng_engine, double dt)
 {
     // Get step
-    Eigen::Vector3d step = simulation::getStep(rng_engine, _params.dimension, _params.step_type);
+    Eigen::Vector3d step = simulation::getStep(rng_engine, params.dimension, params.step_type);
+    // Eigen::Vector3d step = Eigen::Vector3d::Zero(3);
+    // step(0) = 1;
+    // step(1) = 0;
+    // step(2) = 1;
+
     double dt_magnitude = dt;
     double D_coeff_old, D_coeff_new;
 
     // Get D coefficient
-    D_coeff_old = (particle.myocyte_index != -1) ? _params.D_ics : _params.D_ecs;
+    D_coeff_old = (particle.myocyte_index != -1) ? params.D_ics : params.D_ecs;
     D_coeff_new = D_coeff_old;
     step = step * std::sqrt(2 * dt_magnitude * D_coeff_old);
 
-    // Get variables for Transit Model (TODO: Maybe transit model as a _params enumerator or class?)
+    // Get variables for Transit Model (TODO: Maybe transit model as a params enumerator or class?)
     double probability_of_transit, term, D_low, l_low, p_fieremans, p_maruyama;
 
     int counter = 0;
     // TODO: Unify convergence epsilon in class, maybe simulation parameter?
     double convergence_eps = 1e-12;
 
-    while (step.norm() > convergence_eps)
+    // We get local data
+    transform_info transform_data = substrate.getLocalFromGlobal(particle.position);
+    Eigen::Vector3d local_position = transform_data.local_position;
+    Eigen::Vector3d local_step = utility_substrate::rotate_y(step, -transform_data.angle);
+
+    while (local_step.norm() > convergence_eps)
     {
+        Eigen::Vector3d local_normalized_step = local_step / local_step.norm();
+        Eigen::Vector3d remaining_step;
         // std::cout << step.norm() << std::endl;
 
         D_coeff_old = D_coeff_new;
+
+        //Check that the particle is in cardiomycocyte
+        if (particle.myocyte_index!=-1){
+            if (substrate.searchPolygon(local_position)==-1){
+               D_coeff_old = params.D_ecs;
+            }
+            D_coeff_old = params.D_ics;
+        }
+        else{
+            if (substrate.searchPolygon(local_position)!=-1){
+                D_coeff_old = params.D_ics;
+            }
+            D_coeff_old = params.D_ecs;
+        }
+
         counter++;
         // std::cout << "Counter: " << counter << std::endl;
         //  Throw logic_error if we we try to intersect more than 50 times
@@ -234,12 +256,13 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
             throw std::logic_error("Stepping error, stopped while loop in one_dt after trying 50 times");
         }
         // Get transform and local position/step
-        transform_info transform_data = substrate.getLocalFromGlobal(particle.position);
-        Eigen::Vector3d local_position = transform_data.local_position;
-        Eigen::Vector3d local_step = utility_substrate::rotate_y(step, -transform_data.angle);
-        Eigen::Vector3d local_normalized_step = local_step / local_step.norm();
-        Eigen::Vector3d remaining_step;
 
+        // auto check_index = substrate.searchPolygon(local_position);
+        // if (particle.myocyte_index != check_index)
+        //{
+        //   std::cout << "Particle index :" << particle.index << " - Particle myocyte index does not match the index of the polygon it is in" << std::endl;
+        // throw std::logic_error("Particle myocyte index does not match the index of the polygon it is in");
+        //}
         // Get intersection data
         boost::optional<std::tuple<int, double, Eigen::Vector3d>> intersection_data = substrate.intersectPolygon(local_position, local_step);
 
@@ -263,18 +286,18 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
 
             // TODO: Implement transit models, for now we consider the hybrid model
 
-            if (D_coeff_old == _params.D_ecs)
+            if (D_coeff_old == params.D_ecs)
             {
-                D_low = _params.D_ics;
+                D_low = params.D_ics;
                 l_low = distance_to_intersection_projected * std::sqrt(D_low / D_coeff_old);
-                term = 2 * l_low * _params.kappa / D_low;
+                term = 2 * l_low * params.kappa / D_low;
                 p_fieremans = term / (term + 1);
-                p_maruyama = std::sqrt(_params.D_ics / D_coeff_old) > 1 ? 1 : std::sqrt(_params.D_ics / D_coeff_old); // equivalent to matlab min(1,sqrt(substrate.D_i/D_old))
+                p_maruyama = std::sqrt(params.D_ics / D_coeff_old) > 1 ? 1 : std::sqrt(params.D_ics / D_coeff_old); // equivalent to matlab min(1,sqrt(substrate.D_i/D_old))
                 probability_of_transit = p_fieremans * p_maruyama;
             }
             else
             {
-                term = 2 * distance_to_intersection_projected * _params.kappa / _params.D_ics;
+                term = 2 * distance_to_intersection_projected * params.kappa / params.D_ics;
                 p_fieremans = term / (term + 1);
                 // p_maruyama = min(1,sqrt(D_new/D_old)); (in matlab)
                 probability_of_transit = p_fieremans;
@@ -298,12 +321,12 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
                 if (particle.myocyte_index == -1)
                 {
                     particle.myocyte_index = polygon_index;
-                    D_coeff_new = _params.D_ics;
+                    D_coeff_new = params.D_ics;
                 }
                 else
                 {
                     particle.myocyte_index = -1;
-                    D_coeff_new = _params.D_ecs;
+                    D_coeff_new = params.D_ecs;
                 }
                 // Update remaining step to account for the change in D
                 remaining_step = remaining_step * std::sqrt(D_coeff_new / D_coeff_old);
@@ -312,14 +335,15 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
             {
 
                 // Compute the reflection based on the remaining normalized step
-                Eigen::Vector3d reflected_step = remaining_step / remaining_step.norm() - 2 * normal * normal.dot(remaining_step / remaining_step.norm());
+                Eigen::Vector3d remaining_step_normalized = remaining_step / remaining_step.norm();
+                Eigen::Vector3d reflected_step = remaining_step_normalized - 2 * normal * normal.dot(remaining_step_normalized);
                 // Reflect the remaining_step
                 remaining_step = reflected_step * remaining_step.norm();
             }
 
             local_position = local_position + step_to_intersection;
-            local_position = local_position + remaining_step * 1e-8;
-            remaining_step = remaining_step * (1 - 1e-8);
+            local_position = local_position + remaining_step * 1e-6;
+            remaining_step = remaining_step * (1 - 1e-6);
         }
         else
         {
@@ -333,8 +357,28 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
                 Eigen::Vector3d step_to_intersection = local_normalized_step * distance;
                 // Update position to intersection + epsilon
                 local_position = local_position + step_to_intersection;
-                local_position = local_position + remaining_step * 1e-8;
-                remaining_step = remaining_step * (1 - 1e-8);
+                local_position = local_position + remaining_step * 1e-6;
+                remaining_step = remaining_step * (1 - 1e-6);
+
+                // Get global position position now and update local_position
+                Eigen::Vector3d global_position_after_block = substrate.getGlobalFromLocal(local_position, transform_data.iX, transform_data.iY, transform_data.iZ);
+                Eigen::Vector3d global_step = utility_substrate::rotate_y(remaining_step, transform_data.angle);
+
+                // Recalculate transform data and local data (note that local_step is also rotated back might be that block falls into new angle)
+                transform_data = substrate.getLocalFromGlobal(global_position_after_block);
+
+                //Can we do any type of check? Maybe check the highest diff between the two local positions?
+                
+
+                local_position = transform_data.local_position;
+                remaining_step = utility_substrate::rotate_y(global_step, -transform_data.angle);
+
+                int possible_myo = substrate.searchPolygon(local_position);
+
+                if (possible_myo != -1)
+                {
+                    throw std::runtime_error("Particle has crossed block and directly to cardiomyocyte");
+                }
             }
             else
             {
@@ -343,11 +387,32 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
             }
         }
 
-        Eigen::Vector3d next_global_position = substrate.getGlobalFromLocal(local_position, transform_data.iX, transform_data.iY, transform_data.iZ);
-        Eigen::Vector3d global_remaining_step = utility_substrate::rotate_y(remaining_step, transform_data.angle);
-        particle.position = next_global_position;
-        step = global_remaining_step;
+        /*
+        if (particle.myocyte_index != -1)
+        {
+            // Check if particle is in myocyte
+            bool check_myo = substrate.containsPoint(particle.myocyte_index, local_position);
+            if (!check_myo && substrate.searchPolygon(local_position) == -1)
+            {
+                //std::cout << "Local position: " << local_position.transpose() << std::endl;
+                throw std::logic_error("FINAL ONE_DT: Particle is not in the myocyte");
+            }
+        }
+        else
+        {
+            int index_myo = substrate.searchPolygon(local_position);
+            if (index_myo != -1)
+            {
+                //std::cout << "Local position: " << local_position.transpose() << " index myo: " << index_myo << std::endl;
+                throw std::logic_error("FINAL ONE_DT: Particle should be in ECS but is in myocyte");
+            }
+        }*/
+        local_step = remaining_step;
     }
+
+    // Update particle position
+    Eigen::Vector3d next_global_position = substrate.getGlobalFromLocal(local_position, transform_data.iX, transform_data.iY, transform_data.iZ);
+    particle.position = next_global_position;
 }
 
 template void simulation::one_dt<oneGenerator>(Particle &particle, const substrate &substrate, oneGenerator &rng_engine, double dt);

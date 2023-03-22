@@ -29,6 +29,8 @@ public:
     int get_global_seed() const { return _rng_seed; };
     void openFile(const std::string &filename, int particle_index);
     void writeParameters(const std::string &filepath);
+    void initializeFiles();
+
 private:
     int _number_of_particles = 0; // Number of particles
     int _rng_seed = 0;            // Seed

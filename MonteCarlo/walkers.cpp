@@ -23,6 +23,7 @@ walkers::walkers(const int Np, const int seed)
     // Obtain the grandparent path using substring of parent_path
     std::string grand_parent_path = parent_path.string().substr(0, parent_path.string().size() - 5);
 
+    // Create a directory with current time, if exists, throw an error
     auto now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
 
@@ -38,15 +39,18 @@ walkers::walkers(const int Np, const int seed)
     {
         throw std::runtime_error("Directory exists: " + output_path_var + ". You should delete it first");
     }
+
+    //Generate seeds for each particle
     generate_unique_seeds();
 }
 
 void walkers::openFile(const std::string &filename, int particle_index)
 {
+    //Open file for each particle and write header
     Particle &particle = get_particle(particle_index);
     std::string filepath = output_path_var + filename;
     particle.file = fileWriter(filepath);
-    std::string header = "positionX, positionY, positionZ, phaseX, phaseY, phaseZ, myocyte_index \n";
+    std::string header = "positionX, positionY, positionZ, phaseX, phaseY, phaseZ, myocyte_index, flag \n";
     particle.file.addHeader(header);
 }
 
@@ -60,13 +64,21 @@ void walkers::writeParameters(const std::string &filename)
     std::string filepath = grandparent_path_str + "seed_" + std::to_string(_rng_seed) + "_" + filename;
     // iterate through particles and write their positions
     fileWriter file(filepath);
-    std::string header = "positionX, positionY, positionZ, phaseX, phaseY, phaseZ \n";
+    std::string header = "positionX, positionY, positionZ, phaseX, phaseY, phaseZ, myocyte_index, flag \n";
     file.addHeader(header);
     for (int i = 0; i < _number_of_particles; i++)
     {
         Particle &particle = get_particle(i);
-        std::string text = std::to_string(particle.position(0)) + "," + std::to_string(particle.position(1)) + "," + std::to_string(particle.position(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "\n";
+        std::string text = std::to_string(particle.position(0)) + "," + std::to_string(particle.position(1)) + "," + std::to_string(particle.position(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "," + std::to_string(particle.myocyte_index) + "," + std::to_string(particle.flag) + "\n";
         file.write(text);
+    }
+}
+
+void walkers::initializeFiles()
+{
+    for(int i=0; i<_number_of_particles;i++){
+        std::string filename = "/particle_" + std::to_string(i) + ".csv";
+        openFile(filename, i);
     }
 }
 
@@ -82,9 +94,6 @@ void walkers::generate_unique_seeds()
         {
             Particle &particle = get_particle(counter);
             particle.seed = seed;
-            std::string filename = "/particle_" + std::to_string(counter) + ".csv";
-            openFile(filename, counter);
-            // particle.index = counter;
             _seed_set.insert(seed);
             counter++;
         }
