@@ -138,7 +138,7 @@ Eigen::MatrixXd utility_substrate::face_conversion(matvar_t *field)
 
 double utility_substrate::mod(double a, double b)
 {
-    double r = std::fmod(a, b);
+    double r = std::fmod(static_cast<long double>(a), static_cast<long double>(b));
     return r < 0 ? r + b : r;
 }
 

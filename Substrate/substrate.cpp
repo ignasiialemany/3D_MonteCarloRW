@@ -17,7 +17,6 @@ substrate::substrate(std::vector<Eigen::MatrixXd> &myo_vertices, std::vector<Eig
     for (auto &myo_vertices_i : myo_vertices)
     {
         polygon myo(myo_vertices_i, myo_faces[i]);
-        Polyhedron myo_poly = myo.getPolyhedron();
         CGAL::Bbox_3 bbox = myo.getSolidBbox();
         Kernel::Point_3 centroid = CGAL::midpoint(
             Kernel::Point_3(bbox.xmin(), bbox.ymin(), bbox.zmin()),
@@ -35,6 +34,81 @@ substrate::substrate(std::vector<Eigen::MatrixXd> &myo_vertices, std::vector<Eig
     std::cout << "Elapsed time set substrate: " << elapsed.count() << " seconds" << std::endl;
 }
 
+void substrate::write_ply_surface_mesh(const Mesh &mesh, const std::string &filename)
+{
+
+    std::ofstream out(filename);
+    if (!out.is_open())
+    {
+        throw std::runtime_error("Could not open file " + filename);
+        return;
+    }
+
+    out << "ply\n";
+    out << "format ascii 1.0\n";
+    out << "element vertex " << mesh.number_of_vertices() << "\n";
+    out << "property float x\n";
+    out << "property float y\n";
+    out << "property float z\n";
+    out << "element face " << mesh.number_of_faces() << "\n";
+    out << "property list uchar int vertex_indices\n";
+    out << "end_header\n";
+
+    // Write vertices
+    for (const auto &v : mesh.vertices())
+    {
+        const auto &point = mesh.point(v);
+        out << point.x() << " " << point.y() << " " << point.z() << "\n";
+    }
+
+    // Write faces
+    for (const auto &f : mesh.faces())
+    {
+        out << "3";
+        CGAL::Vertex_around_face_circulator<Mesh> vcirc(mesh.halfedge(f), mesh), done(vcirc);
+        do
+        {
+            out << " " << (*vcirc).idx();
+        } while (++vcirc != done);
+        out << "\n";
+    }
+
+    out.close();
+}
+
+void substrate::write_ply_polyhedron(polygon &poly, const std::string &filename)
+{
+    std::ofstream out(filename);
+    if (!out.is_open())
+    {
+        throw std::runtime_error("Could not open file " + filename);
+        return;
+    }
+
+    // Write header
+    out << "ply\n";
+    out << "format ascii 1.0\n";
+    out << "element vertex " << poly.getVertices().size() << "\n";
+    out << "property float x\n";
+    out << "property float y\n";
+    out << "property float z\n";
+    out << "element face " << poly.getFaces().size() << "\n";
+    out << "property list uchar int vertex_indices\n";
+    out << "end_header\n";
+
+    // Write vertices
+    for (auto &vertex : poly.getVertices())
+    {
+        out << vertex.x() << " " << vertex.y() << " " << vertex.z() << "\n";
+    }
+
+    for (auto &face : poly.getFaces())
+    {
+        out << "3 " << face[0] << " " << face[1] << " " << face[2] << "\n";
+    }
+    out.close();
+}
+
 void substrate::setTransform(transform &t)
 {
     _transform = t;
@@ -47,7 +121,7 @@ boost::optional<std::tuple<int, double, Eigen::Vector3d>> substrate::intersectPo
     // TODO: This will have to be modified when considering a full geometry. Maybe input into to the Ktree the 8 points of bounding box?
     Kernel::Point_3 query((double)point(0), (double)point(1), 126.0 / 2);
 
-    Neighbor_search search(*_tree, query, 3);
+    Neighbor_search search(*_tree, query, 5);
 
     double min_distance_children = std::numeric_limits<double>::max();
     int index_polygon = -1;
@@ -59,11 +133,11 @@ boost::optional<std::tuple<int, double, Eigen::Vector3d>> substrate::intersectPo
         if (intersection)
         {
             int index_face = boost::get<std::pair<int, double>>(*intersection).first;
-            double distance_to_face = boost::get<std::pair<int, double>>(*intersection).second;
+            Kernel::FT distance_to_face = boost::get<std::pair<int, double>>(*intersection).second;
 
             if (distance_to_face < min_distance_children)
             {
-                min_distance_children = distance_to_face;
+                min_distance_children = CGAL::to_double(distance_to_face);
                 index_polygon = _map_centroid_to_polygon.at(it->first);
                 normal_vector = _myocytes[_map_centroid_to_polygon.at(it->first)].getNormalVector(index_face);
             }
@@ -104,8 +178,6 @@ boost::optional<double> substrate::intersectionBlock(const Eigen::Vector3d &poin
     if (intersections.size() == 0)
     {
         throw std::runtime_error("Substrate::intersectionBlock -> No intersection found but segment.target() is outside block");
-        // std::cout << "No intersection found but point p2 is outside the solid_box" << std::endl;
-        // return boost::optional<double>();
     }
 
     for (const auto &intersection : intersections)
@@ -114,20 +186,50 @@ boost::optional<double> substrate::intersectionBlock(const Eigen::Vector3d &poin
         if (intersection.first.which() == 0)
         {
             Kernel::Point_3 point_intersected = boost::get<Kernel::Point_3>(intersection.first);
-            double distance = CGAL::sqrt(CGAL::squared_distance(point_intersected, segment.source()));
+            auto primitive = boost::get<Primitive>(intersection.second);
+            Kernel::Triangle_3 triangle = primitive.datum();
+            // check point_intersected inside triangle
+            // if (triangle.has_on(point_intersected))
+            //{
+            Kernel::Segment_3 edge1(triangle.vertex(1), triangle.vertex(0));
+            Kernel::Segment_3 edge2(triangle.vertex(2), triangle.vertex(0));
+            Kernel::Segment_3 edge3(triangle.vertex(2), triangle.vertex(1));
+
+            double min_edge_distance = std::min(CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge1))), std::min(
+                                                                                                                                   CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge2))),
+                                                                                                                                   CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge3)))));
+
+            // Check if the point is too close to an edge
+            if (min_edge_distance < 1e-8)
+            {
+                throw std::runtime_error("Polygon::intersection -> Intersection found but point is too close to an edge, uncertain");
+            }
+
+            Kernel::FT squared_distance = CGAL::squared_distance(point_intersected, segment.source());
+            double distance = CGAL::sqrt(CGAL::to_double(squared_distance));
             if (distance < min_distance)
             {
                 min_distance = distance;
             }
+            //}
+            // else
+            //{
+            //   throw std::runtime_error("Polygon::intersection -> Intersection found but point is not on face, uncertain");
+            //}
         }
         else
         {
             throw std::runtime_error("Substrate::intersectionBlock -> Intersection found but segment is parallel and lies on face");
         }
     }
+
+    if (min_distance == std::numeric_limits<double>::max())
+    {
+        throw std::runtime_error("Substrate::intersectionBlock -> Intersection error.");
+    }
     // TODO: Unify epsilon values in the code
-    double t = min_distance / CGAL::sqrt(segment.squared_length());
-    if ((1 - t) < 1e-6)
+    double t = CGAL::to_double(min_distance) / step.norm();
+    if ((1 - t) < 1e-8 || t < 1e-8)
     {
         throw std::runtime_error("Substrate::intersectionBlock -> Remaining step is too short, might be uncertain");
     }
@@ -153,15 +255,33 @@ int substrate::searchPolygon(const Eigen::Vector3d &point, const std::string &fr
     //  We will place the point in the center of the block as the tree is built with the centroid of the polygons
     Kernel::Point_3 query((double)point_local(0), (double)point_local(1), 126.0 / 2);
 
-    Neighbor_search search(*_tree, query, 3);
+    Neighbor_search search(*_tree, query, 10);
+
+    std::vector<std::pair<int, double>> indices_and_squared_distances;
 
     for (Neighbor_search::iterator it = search.begin(); it != search.end(); ++it)
     {
         int index_polygon = _map_centroid_to_polygon.at(it->first);
+        double squared_distance = CGAL::to_double(it->second); // Get the squared distance directly
+        indices_and_squared_distances.push_back(std::make_pair(index_polygon, squared_distance));
+    }
+
+    // Sort the vector by squared distance
+    std::sort(indices_and_squared_distances.begin(), indices_and_squared_distances.end(),
+              [](const std::pair<int, double> &a, const std::pair<int, double> &b)
+              {
+                  return a.second < b.second;
+              });
+
+    // Check if the point is contained in any of the sorted polygons
+    for (const auto &index_squared_distance_pair : indices_and_squared_distances)
+    {
+        int index_polygon = index_squared_distance_pair.first;
         if (_myocytes[index_polygon].containsPoint(point_local))
         {
             return index_polygon;
         }
     }
+
     return -1;
 }
