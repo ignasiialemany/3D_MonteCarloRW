@@ -29,6 +29,7 @@ struct sequence_parameters
 class sequence
 {
 public:
+    sequence()=default;
     sequence(const std::string &filename)
     {
         YAML::Node config = YAML::LoadFile(filename);

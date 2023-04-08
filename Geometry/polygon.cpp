@@ -7,9 +7,15 @@
 
 polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
 {
-    // Create a bounding box from min max vertices
-    // createBbox(min_point, max_point);
     createPolygon(vertices, faces);
+    if (!_poly.is_valid() || !_poly.is_closed())
+    {
+        std::cerr << "Error: The input mesh is not valid or not closed." << std::endl;
+        return;
+    }
+    // Fix non-manifold issues
+    CGAL::Polygon_mesh_processing::duplicate_non_manifold_vertices(_poly);
+    CGAL::Polygon_mesh_processing::stitch_borders(_poly);
     _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
     _solid_bbox = _AABBtree->bbox();
 }

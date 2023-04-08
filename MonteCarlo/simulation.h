@@ -49,7 +49,7 @@ public:
 
     bool seedParticlesInBox(const substrate &substrate);
     void performScan(const substrate &substrate, const sequence &sequence);
-    void writeParticlesState(const std::string &file_path){_particles->writeParameters(file_path);};
+    void writeParticlesState(const std::string &file_path, substrate &sub){_particles->writeParameters(file_path,sub);};
     Particle& get_particle(int i){return _particles->get_particle(i);};
     template <typename URNG>
     void one_dt(Particle &particle, const substrate &substrate, URNG &rng_engine, double dt);

@@ -36,6 +36,8 @@
 #include <CGAL/Polygon_mesh_processing/polygon_soup_to_polygon_mesh.h>
 #include <CGAL/Polygon_mesh_processing/compute_normal.h>
 #include <CGAL/Polygon_mesh_processing/orient_polygon_soup.h>
+#include <CGAL/Polygon_mesh_processing/repair.h>
+#include <CGAL/Polygon_mesh_processing/stitch_borders.h>
 #include <CGAL/mst_orient_normals.h>
 #include <CGAL/Poisson_reconstruction_function.h>
 #include <CGAL/property_map.h>

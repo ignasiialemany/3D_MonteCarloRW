@@ -54,7 +54,7 @@ void walkers::openFile(const std::string &filename, int particle_index)
     particle.file.addHeader(header);
 }
 
-void walkers::writeParameters(const std::string &filename)
+void walkers::writeParameters(const std::string &filename, substrate &sub)
 {
     auto current_path = boost::filesystem::current_path();
     auto parent_path = current_path.parent_path();
@@ -69,7 +69,9 @@ void walkers::writeParameters(const std::string &filename)
     for (int i = 0; i < _number_of_particles; i++)
     {
         Particle &particle = get_particle(i);
-        std::string text = std::to_string(particle.position(0)) + "," + std::to_string(particle.position(1)) + "," + std::to_string(particle.position(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "," + std::to_string(particle.myocyte_index) + "," + std::to_string(particle.flag) + "\n";
+        auto transform = sub.getLocalFromGlobal(particle.position);
+        auto local_pos = transform.local_position;
+        std::string text = std::to_string(local_pos(0)) + "," + std::to_string(local_pos(1)) + "," + std::to_string(local_pos(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "," + std::to_string(particle.myocyte_index) + "," + std::to_string(particle.flag) + "\n";
         file.write(text);
     }
 }

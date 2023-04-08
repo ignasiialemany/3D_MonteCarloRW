@@ -5,6 +5,7 @@
 #include <random>
 #include <Eigen/Dense>
 #include "../Utility/fileWriter.h"
+#include "../Substrate/substrate.h"
 
 struct Particle
 {
@@ -28,7 +29,7 @@ public:
     int get_number_of_particles() const { return _number_of_particles; };
     int get_global_seed() const { return _rng_seed; };
     void openFile(const std::string &filename, int particle_index);
-    void writeParameters(const std::string &filepath);
+    void writeParameters(const std::string &filepath, substrate &sub);
     void initializeFiles();
 
 private:

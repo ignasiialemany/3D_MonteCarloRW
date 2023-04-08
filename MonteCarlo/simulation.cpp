@@ -109,7 +109,6 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
         // Get dT and dG values
         double dt_magnitude = sequence.dt(i);
         double dG_magnitude = sequence.gG(i);
-        // TODO: Calculate phase from dG and dT and position
         particle.phase = particle.phase + (dG_magnitude * dt_magnitude) * particle.position;
         // Initialize counter and flags
         int counter = 0;
@@ -128,7 +127,6 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
             try
             {
 
-                // TODO: Probably delete sequence input from one_dt
                 one_dt(particle, substrate, rng_engine, dt_magnitude);
                 if (params.isOutput)
                 {
@@ -204,7 +202,7 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
     // Eigen::Vector3d step = Eigen::Vector3d::Zero(3);
     // step(0) = 1;
     // step(1) = 0;
-    // step(2) = 1;
+    step(2) = 0;
 
     double dt_magnitude = dt;
     double D_coeff_old, D_coeff_new;
