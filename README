@@ -1,0 +1,13 @@
+Install anaconda and run (for now, only valid in macOS. For other operating systems manually install dependencies)
+
+conda env create -f environment.yml
+
+This should have installed everything in a virtual env called "native". You will also need homebrew and install g++12, eigen and matio
+
+brew install gcc@12
+brew install eigen
+brew install libmatio
+
+Check the path were g++12 has been installed. For me "/opt/homebrew/opt/gcc/bin/g++-12". Modify CMakeLists.txt (first two lines) if your compiler has been installed in a different path: "set(CMAKE_C_COMPILER "/opt/homebrew/opt/gcc/bin/gcc-12")
+set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/gcc/bin/g++-12")".
+
