@@ -1,6 +1,6 @@
 Install anaconda and run (for now, only valid in macOS. For other operating systems manually install dependencies)
 
-```conda env create -f environment.yml```
+`conda env create -f environment.yml`
 
 This should have installed everything in a virtual env called "native". You will also need homebrew and install g++12, eigen and matio
 
