@@ -5,3 +5,6 @@ build/
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/settings.json
+third_party/yaml-cpp/util/.DS_Store
+third_party/yaml-cpp/util/CMakeFiles/.DS_Store
+testing/.DS_Store
