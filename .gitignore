@@ -8,3 +8,6 @@ build/
 third_party/yaml-cpp/util/.DS_Store
 third_party/yaml-cpp/util/CMakeFiles/.DS_Store
 testing/.DS_Store
+third_party/yaml-cpp/.DS_Store
+third_party/.DS_Store
+.DS_Store
