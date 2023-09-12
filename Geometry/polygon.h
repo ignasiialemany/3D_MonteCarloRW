@@ -42,14 +42,18 @@
 #include <CGAL/Poisson_reconstruction_function.h>
 #include <CGAL/property_map.h>
 #include <CGAL/compute_average_spacing.h>
+#include <CGAL/IO/PLY.h>
 #include <vector>
 #include <fstream>
 #include <Eigen/Dense>
 #include <CGAL/Object.h>
 #include <memory>
-#include <CGAL/IO/PLY.h>
 #include <fstream>
 #include <CGAL/Polygon_mesh_processing/remesh.h>
+#include <CGAL/Surface_mesh/IO/PLY.h>
+#include <CGAL/Surface_mesh/Surface_mesh.h>
+
+
 
 //typedef CGAL::Simple_cartesian<long double> Kernel;
 typedef CGAL::Simple_cartesian<double> Kernel;
@@ -68,6 +72,7 @@ class polygon
 public:
     polygon() = default;
     //Add deconstructor
+    polygon(const std::string &filename);
     polygon(const Eigen::MatrixXd &vertices_input, const Eigen::MatrixXd &faces_input);
     polygon(Polyhedron &poly);
 

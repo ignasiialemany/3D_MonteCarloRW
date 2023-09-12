@@ -20,6 +20,57 @@ polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
     _solid_bbox = _AABBtree->bbox();
 }
 
+polygon::polygon(const std::string& filename){
+
+    std::ifstream input(filename);
+    std::string comments;
+
+    if (!input)
+    {
+        std::cerr << "Cannot open input file: " << filename << std::endl;
+        return;
+    }
+
+    CGAL::Surface_mesh<Kernel::Point_3> mesh_surface;
+    CGAL::read_ply(input, mesh_surface, comments);
+
+    std::vector<std::vector<std::size_t>> facets;
+
+
+    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> B(_poly.hds(), true);    
+    B.begin_surface(mesh_surface.number_of_vertices(), mesh_surface.number_of_faces());
+    int size_faces = mesh_surface.number_of_faces();
+    for (auto vertex : mesh_surface.vertices()) {
+        auto point = mesh_surface.point(vertex);
+        _vertices.emplace_back(point);
+        B.add_vertex(point);
+    }
+
+    for (auto face : mesh_surface.faces()) {
+        std::vector<std::size_t> face_input;
+        for (auto vertex : mesh_surface.vertices_around_face(mesh_surface.halfedge(face))) {
+            face_input.push_back(vertex.idx());
+        }
+        B.begin_facet();
+        for (const auto &index : face_input)
+        {
+            B.add_vertex_to_facet(index);
+        }
+        B.end_facet();
+
+        Kernel::Triangle_3 triangle_face(_vertices[face_input[0]], _vertices[face_input[1]], _vertices[face_input[2]]);
+        triangle_faces.push_back(triangle_face);
+        _faces.push_back(face_input);
+    }
+    B.end_surface();
+
+    CGAL::Polygon_mesh_processing::duplicate_non_manifold_vertices(_poly);
+    CGAL::Polygon_mesh_processing::stitch_borders(_poly);
+    _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
+    _solid_bbox = _AABBtree->bbox();
+
+}
+
 polygon::polygon(Polyhedron &poly)
 {
     _poly = poly;
