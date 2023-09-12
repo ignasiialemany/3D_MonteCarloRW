@@ -1,1 +1,0 @@
-/opt/homebrew/opt/gcc/bin/g++-12  -g -g -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX12.3.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names "CMakeFiles/yaml-cpp-read.dir/read.cpp.o" -o read  ../libyaml-cppd.a 
