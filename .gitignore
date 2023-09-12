@@ -9,6 +9,7 @@ third_party/.DS_Store
 third_party/yaml-cpp/.DS_Store
 third_party/yaml-cpp/util/.DS_Store
 third_party/yaml-cpp/util/CMakeFiles/.DS_Store
+third_party/
 .DS_Store
 MRI/.DS_Store
 MonteCarlo/.DS_Store
