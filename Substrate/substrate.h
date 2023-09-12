@@ -38,6 +38,7 @@ public:
     // add deconstructor
     substrate() = default;
     substrate(std::vector<Eigen::MatrixXd> &myo_vertices, std::vector<Eigen::MatrixXd> &myo_faces);
+    substrate(const std::string& filename)
     void setTransform(transform &t);
 
     transform_info getLocalFromGlobal(const Eigen::Vector3d &global_position) const { return _transform.global2local(global_position); };

@@ -21,12 +21,36 @@ substrate::substrate(std::vector<Eigen::MatrixXd> &myo_vertices, std::vector<Eig
         Kernel::Point_3 centroid = CGAL::midpoint(
             Kernel::Point_3(bbox.xmin(), bbox.ymin(), bbox.zmin()),
             Kernel::Point_3(bbox.xmax(), bbox.ymax(), bbox.zmax()));
-        _myocytes.emplace_back(std::move(myo));
+        _myocytes.emplace_back(myo);
         _points.emplace_back(centroid);
         _map_centroid_to_polygon[centroid] = i;
         ++i;
     }
 
+    _tree = std::make_unique<Tree>(_points.begin(), _points.end());
+    auto end = std::chrono::high_resolution_clock::now(); // end timer
+
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Elapsed time set substrate: " << elapsed.count() << " seconds" << std::endl;
+}
+substrate::substrate(const std::string& filePath){
+    auto start = std::chrono::high_resolution_clock::now(); // start timer
+
+    std::vector<std::string> polyFiles;
+    int i=0;
+    for (const auto &file: std::filesystem::directory_iterator(filePath)){
+        if (file.path().extension() == ".ply"){
+            polygon myo(file.path().string());
+            CGAL::Bbox_3 bbox = myo.getSolidBbox();
+            Kernel::Point_3 centroid = CGAL::midpoint(
+                Kernel::Point_3(bbox.xmin(), bbox.ymin(), bbox.zmin()),
+                Kernel::Point_3(bbox.xmax(), bbox.ymax(), bbox.zmax()));
+            _myocytes.emplace_back(myo);
+            _points.emplace_back(centroid);
+            _map_centroid_to_polygon[centroid] = i;
+            ++i;
+        }
+    }
     _tree = std::make_unique<Tree>(_points.begin(), _points.end());
     auto end = std::chrono::high_resolution_clock::now(); // end timer
 
