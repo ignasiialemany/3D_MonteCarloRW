@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.5)
-set(CMAKE_C_COMPILER "/opt/homebrew/opt/gcc/bin/gcc-12")
-set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/gcc/bin/g++-12")
+set(CMAKE_C_COMPILER "/opt/homebrew/opt/gcc/bin/gcc-13")
+set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/gcc/bin/g++-13")
 set(CMAKE_CXX_STANDARD 14)
 project(3DRandomWalk)
 
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Debug")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Choose your desired optimization level and floating-point settings
-    set(OPTIMIZATION_LEVEL "-O3") 
+    set(OPTIMIZATION_LEVEL "-O0") 
     set(FP_CONSISTENCY_FLAGS "")
 
     # Apply the same optimization level and floating-point settings to Debug and Release configurations
@@ -24,7 +24,7 @@ add_subdirectory(third_party/matio-cpp-master)
 set(CONDA_ENV_NAME "native")
 
 # Set the paths to the conda environment
-set(CONDA_PREFIX "/Users/ia4118/opt/anaconda3/envs/${CONDA_ENV_NAME}")
+set(CONDA_PREFIX "~/anaconda3/envs/${CONDA_ENV_NAME}")
 set(CONDA_INCLUDE_DIR "${CONDA_PREFIX}/include")
 set(CONDA_LIBRARY_DIR "${CONDA_PREFIX}/lib")
 
