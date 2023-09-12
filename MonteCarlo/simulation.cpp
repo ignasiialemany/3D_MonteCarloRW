@@ -199,11 +199,7 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
 {
     // Get step
     Eigen::Vector3d step = simulation::getStep(rng_engine, params.dimension, params.step_type);
-    // Eigen::Vector3d step = Eigen::Vector3d::Zero(3);
-    // step(0) = 1;
-    // step(1) = 0;
-    step(2) = 0;
-
+    
     double dt_magnitude = dt;
     double D_coeff_old, D_coeff_new;
 
