@@ -62,7 +62,7 @@ void simulation::writeToFile(Particle &particle)
     particle.file.write(text);
 }
 
-void simulation::performScan(const substrate &substrate, const sequence &sequence)
+void simulation::performScan(substrate &substrate, const sequence &sequence)
 {
     if (params.isOutput)
     {
@@ -99,16 +99,18 @@ void simulation::performScan(const substrate &substrate, const sequence &sequenc
     std::cout << "Simulation finished" << std::endl;
 }
 
-void simulation::one_walker(Particle &particle, const substrate &substrate, const sequence &sequence)
+void simulation::one_walker(Particle &particle, substrate &substrate, const sequence &sequence)
 {
     particle.myocyte_index = substrate.searchPolygon(particle.position, "global");
     std::mt19937 rng_engine(particle.seed);
-
+    double total_time = 0;
+    
     for (int i = 0; i < sequence.dt.size(); i++)
     {
         // Get dT and dG values
         double dt_magnitude = sequence.dt(i);
         double dG_magnitude = sequence.gG(i);
+        total_time = total_time + dt_magnitude;
         particle.phase = particle.phase + (dG_magnitude * dt_magnitude) * particle.position;
         // Initialize counter and flags
         int counter = 0;
@@ -127,7 +129,7 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
             try
             {
 
-                one_dt(particle, substrate, rng_engine, dt_magnitude);
+                one_dt(particle, substrate, rng_engine, dt_magnitude, total_time);
                 if (params.isOutput)
                 {
                     writeToFile(particle);
@@ -158,6 +160,7 @@ void simulation::one_walker(Particle &particle, const substrate &substrate, cons
                 }
             }
         }
+
     }
 }
 
@@ -195,7 +198,7 @@ Eigen::Vector3d simulation::getStep(URNG &rng_engine, int dimension, std::string
 }
 
 template <typename URNG>
-void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rng_engine, double dt)
+void simulation::one_dt(Particle &particle, substrate &substrate, URNG &rng_engine, double dt, double total_time)
 {
     // Get step
     Eigen::Vector3d step = simulation::getStep(rng_engine, params.dimension, params.step_type);
@@ -258,7 +261,8 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
         // throw std::logic_error("Particle myocyte index does not match the index of the polygon it is in");
         //}
         // Get intersection data
-        boost::optional<std::tuple<int, double, Eigen::Vector3d>> intersection_data = substrate.intersectPolygon(local_position, local_step);
+        // PASS IN TOTAL_TIME AS INPUT
+        boost::optional<std::tuple<int, double, Eigen::Vector3d>> intersection_data = substrate.intersectPolygon(local_position, local_step, total_time);
 
         // If intersection is type bool and false
         if (intersection_data)
@@ -409,7 +413,7 @@ void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rn
     particle.position = next_global_position;
 }
 
-template void simulation::one_dt<oneGenerator>(Particle &particle, const substrate &substrate, oneGenerator &rng_engine, double dt);
-template void simulation::one_dt<std::mt19937>(Particle &particle, const substrate &substrate, std::mt19937 &rng_engine, double dt);
+template void simulation::one_dt<oneGenerator>(Particle &particle, substrate &substrate, oneGenerator &rng_engine, double dt, double total_time);
+template void simulation::one_dt<std::mt19937>(Particle &particle, substrate &substrate, std::mt19937 &rng_engine, double dt, double total_time);
 template Eigen::Vector3d simulation::getStep<oneGenerator>(oneGenerator &rng_engine, int dimension, std::string step_type);
 template Eigen::Vector3d simulation::getStep<std::mt19937>(std::mt19937 &rng_engine, int dimension, std::string step_type);

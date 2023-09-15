@@ -6,6 +6,7 @@
 #include <chrono>
 #include <limits>
 #include <boost/variant.hpp>
+#include <boost/filesystem.hpp>
 substrate::substrate(std::vector<Eigen::MatrixXd> &myo_vertices, std::vector<Eigen::MatrixXd> &myo_faces) : _tree()
 {
     auto start = std::chrono::high_resolution_clock::now(); // start timer
@@ -21,7 +22,7 @@ substrate::substrate(std::vector<Eigen::MatrixXd> &myo_vertices, std::vector<Eig
         Kernel::Point_3 centroid = CGAL::midpoint(
             Kernel::Point_3(bbox.xmin(), bbox.ymin(), bbox.zmin()),
             Kernel::Point_3(bbox.xmax(), bbox.ymax(), bbox.zmax()));
-        _myocytes.emplace_back(myo);
+        _myocytes.emplace_back(std::move(myo));
         _points.emplace_back(centroid);
         _map_centroid_to_polygon[centroid] = i;
         ++i;
@@ -33,30 +34,36 @@ substrate::substrate(std::vector<Eigen::MatrixXd> &myo_vertices, std::vector<Eig
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Elapsed time set substrate: " << elapsed.count() << " seconds" << std::endl;
 }
-substrate::substrate(const std::string& filePath){
+substrate::substrate(const std::vector<std::string>& polygons){
+
+    //iterate over polygons
+    int i=0;
     auto start = std::chrono::high_resolution_clock::now(); // start timer
 
-    std::vector<std::string> polyFiles;
-    int i=0;
-    for (const auto &file: std::filesystem::directory_iterator(filePath)){
-        if (file.path().extension() == ".ply"){
-            polygon myo(file.path().string());
-            CGAL::Bbox_3 bbox = myo.getSolidBbox();
-            Kernel::Point_3 centroid = CGAL::midpoint(
-                Kernel::Point_3(bbox.xmin(), bbox.ymin(), bbox.zmin()),
-                Kernel::Point_3(bbox.xmax(), bbox.ymax(), bbox.zmax()));
-            _myocytes.emplace_back(myo);
-            _points.emplace_back(centroid);
-            _map_centroid_to_polygon[centroid] = i;
-            ++i;
-        }
+    for (const auto &poly: polygons){
+        polygon myo(poly);
+        CGAL::Bbox_3 bbox = myo.getSolidBbox();
+        Kernel::Point_3 centroid = CGAL::midpoint(
+            Kernel::Point_3(bbox.xmin(), bbox.ymin(), bbox.zmin()),
+            Kernel::Point_3(bbox.xmax(), bbox.ymax(), bbox.zmax()));
+        _myocytes.emplace_back(std::move(myo));
+        _points.emplace_back(centroid);
+        _map_centroid_to_polygon[centroid] = i;
+        ++i;
     }
+    
     _tree = std::make_unique<Tree>(_points.begin(), _points.end());
+    
     auto end = std::chrono::high_resolution_clock::now(); // end timer
-
+    
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Elapsed time set substrate: " << elapsed.count() << " seconds" << std::endl;
 }
+
+void substrate::setStrain(std::function<double(double)> strain_f){
+    strain = strain_f;
+}
+
 
 void substrate::write_ply_surface_mesh(const Mesh &mesh, const std::string &filename)
 {
@@ -138,7 +145,7 @@ void substrate::setTransform(transform &t)
     _transform = t;
 }
 
-boost::optional<std::tuple<int, double, Eigen::Vector3d>> substrate::intersectPolygon(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
+boost::optional<std::tuple<int, double, Eigen::Vector3d>> substrate::intersectPolygon(const Eigen::Vector3d &point, const Eigen::Vector3d &step, const double time)
 {
     // We will place the point in the center of the block as the tree is built with the centroid of the polygons
 
@@ -153,7 +160,8 @@ boost::optional<std::tuple<int, double, Eigen::Vector3d>> substrate::intersectPo
 
     for (Neighbor_search::iterator it = search.begin(); it != search.end(); ++it)
     {
-        boost::optional<std::pair<int, double>> intersection = _myocytes[_map_centroid_to_polygon.at(it->first)].intersection(point, step);
+        //Pass in total_time here 
+        boost::optional<std::pair<int, double>> intersection = _myocytes[_map_centroid_to_polygon.at(it->first)].intersection(point, step, time, strain);
         if (intersection)
         {
             int index_face = boost::get<std::pair<int, double>>(*intersection).first;
