@@ -52,9 +52,7 @@
 #include <CGAL/Polygon_mesh_processing/remesh.h>
 #include <CGAL/Surface_mesh/IO/PLY.h>
 #include <CGAL/Surface_mesh/Surface_mesh.h>
-
-
-
+#include "../Utility/offMeshReader.h"
 //typedef CGAL::Simple_cartesian<long double> Kernel;
 typedef CGAL::Simple_cartesian<double> Kernel;
 typedef CGAL::Polyhedron_3<Kernel> Polyhedron;
@@ -82,7 +80,7 @@ public:
     Polyhedron getBbox() { return _bbox; };
     CGAL::Bbox_3 getSolidBbox() { return _solid_bbox; };
     // boost::variant<bool, std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
-    boost::optional<std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
+    boost::optional<std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step, const double time,std::function<double(double)> strain);
 
     // bool containsPoint(const Eigen::Vector3d &point);
     bool containsPoint(const Eigen::Vector3d &point) const;
@@ -100,6 +98,8 @@ private:
     Mesh mesh;
     void createBbox(Kernel::Point_3 min_point, Kernel::Point_3 max_point);
     void createPolygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces);
+    Eigen::MatrixXd compute_vertex_displacement(CGAL::Polyhedron_3<Kernel>& poly, double time, double strain);
+    void updatePolygon(const Eigen::MatrixXd &displacement);
     std::vector<CGAL::Point_3<Kernel>> _vertices;
     std::vector<std::vector<std::size_t>> _faces;
     std::unique_ptr<Tree_AABB> _AABBtree;

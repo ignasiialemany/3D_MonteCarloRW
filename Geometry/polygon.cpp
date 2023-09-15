@@ -22,53 +22,15 @@ polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
 
 polygon::polygon(const std::string& filename){
 
-    std::ifstream input(filename);
-    std::string comments;
-
-    if (!input)
-    {
-        std::cerr << "Cannot open input file: " << filename << std::endl;
-        return;
-    }
-
-    CGAL::Surface_mesh<Kernel::Point_3> mesh_surface;
-    CGAL::read_ply(input, mesh_surface, comments);
-
-    std::vector<std::vector<std::size_t>> facets;
-
-
-    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> B(_poly.hds(), true);    
-    B.begin_surface(mesh_surface.number_of_vertices(), mesh_surface.number_of_faces());
-    int size_faces = mesh_surface.number_of_faces();
-    for (auto vertex : mesh_surface.vertices()) {
-        auto point = mesh_surface.point(vertex);
-        _vertices.emplace_back(point);
-        B.add_vertex(point);
-    }
-
-    for (auto face : mesh_surface.faces()) {
-        std::vector<std::size_t> face_input;
-        for (auto vertex : mesh_surface.vertices_around_face(mesh_surface.halfedge(face))) {
-            face_input.push_back(vertex.idx());
-        }
-        B.begin_facet();
-        for (const auto &index : face_input)
-        {
-            B.add_vertex_to_facet(index);
-        }
-        B.end_facet();
-
-        Kernel::Triangle_3 triangle_face(_vertices[face_input[0]], _vertices[face_input[1]], _vertices[face_input[2]]);
-        triangle_faces.push_back(triangle_face);
-        _faces.push_back(face_input);
-    }
-    B.end_surface();
-
+    offMeshReader reader;
+    reader.read(filename);
+    Eigen::MatrixXd vertices_mesh = reader.getVertices();
+    Eigen::MatrixXd faces_mesh = reader.getFaces();
+    createPolygon(vertices_mesh, faces_mesh);
     CGAL::Polygon_mesh_processing::duplicate_non_manifold_vertices(_poly);
     CGAL::Polygon_mesh_processing::stitch_borders(_poly);
     _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
     _solid_bbox = _AABBtree->bbox();
-
 }
 
 polygon::polygon(Polyhedron &poly)
@@ -143,8 +105,47 @@ double polygon::computeSurface()
     return surface_area;
 }
 
-boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
+Eigen::MatrixXd polygon::compute_vertex_displacement(CGAL::Polyhedron_3<Kernel>& poly, double time, double strain)
 {
+    // Compute vertices (std::vector<Kernel::Point_3>)
+    std::vector<Kernel::Point_3> poly_verticies;
+    for (Polyhedron::Vertex_iterator vertex_it = poly.vertices_begin(); vertex_it != poly.vertices_end(); ++vertex_it)
+    {
+        poly_verticies.push_back(vertex_it->point());
+    }
+
+    Polyhedron::Point centroid = CGAL::centroid(poly_verticies.begin(), poly_verticies.end());
+    //Convert centroid to Eigen::Vector3d
+    Eigen::Vector3d centroid_point(centroid.x(), centroid.y(), centroid.z());
+
+    // Iterate over vertices and find dispacement based on strain
+    Eigen::MatrixXd displacement(poly.size_of_vertices(), 3);
+    int i = 0;
+    for (Polyhedron::Vertex_iterator vertex_it = poly.vertices_begin(); vertex_it != poly.vertices_end(); ++vertex_it)
+    {
+        Eigen::Vector3d vertex_position(vertex_it->point().x(), vertex_it->point().y(), vertex_it->point().z());
+        vertex_position = vertex_position - centroid_point;
+
+        //For displacements row component 0 and 1 do not change
+        displacement(i, 0) = (1/std::sqrt(1+strain))*vertex_position(0) - vertex_position(0);
+        displacement(i, 1) = (1/std::sqrt(1+strain))*vertex_position(1) - vertex_position(1);
+        displacement(i, 2) = strain*vertex_position(2);
+        i++;        
+    }
+
+    return displacement;
+}
+
+
+boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step, const double time, std::function<double(double)> strain)
+{
+    double strain_vec = strain(time);
+
+    Eigen::MatrixXd displacements = compute_vertex_displacement(_poly, time, strain_vec);
+
+    updatePolygon(displacements);
+   
+
     Kernel::Segment_3 segment(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Point_3(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
     std::vector<std::pair<boost::variant<Kernel::Point_3, Kernel::Segment_3>, Primitive>> intersections;
     _AABBtree->all_intersections(segment, std::back_inserter(intersections));
@@ -176,11 +177,12 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
                                                                                                                                    CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge2))),
                                                                                                                                    CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge3)))));
 
+            //We have commented THIS as may not be relevant? What if it's close to an edge? 
             // Check if the point is too close to an edge
-            if (min_edge_distance < 1e-8)
-            {
-                throw std::runtime_error("Polygon::intersection -> Intersection found but point is too close to an edge, uncertain");
-            }
+            //if (min_edge_distance < 1e-8)
+            //{
+              //  throw std::runtime_error("Polygon::intersection -> Intersection found but point is too close to an edge, uncertain");
+            //}
 
             Kernel::FT squared_distance = CGAL::squared_distance(point_intersected, segment.source());
             double distance = CGAL::sqrt(CGAL::to_double(squared_distance));
@@ -212,6 +214,8 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
     {
         throw std::runtime_error("Polygon::intersection -> Remaining step is too short, might be uncertain");
     }
+
+
     return std::pair<int, double>(min_index, min_distance);
 }
 
@@ -327,6 +331,42 @@ bool polygon::isPolygonClosed()
     return true;
 }
 
+void polygon::updatePolygon(const Eigen::MatrixXd &displacement){
+   //Iterate over _vertices and add the displacement
+    int i = 0;
+    for (Polyhedron::Vertex_iterator vertex_it = _poly.vertices_begin(); vertex_it != _poly.vertices_end(); ++vertex_it)
+    {
+        Eigen::Vector3d vertex_position(vertex_it->point().x(), vertex_it->point().y(), vertex_it->point().z());
+        Eigen::Vector3d displacement_vec = displacement.row(i);
+        vertex_position = vertex_position + displacement_vec;
+        vertex_it->point() = Kernel::Point_3(vertex_position(0), vertex_position(1), vertex_position(2));
+        i++;
+    }
+    //Clear triangle_faces and reupdate 
+    triangle_faces.clear();
+    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
+    {
+        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
+        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
+        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
+        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
+        // create std::vector<std::size_t> for each face
+        triangle_faces.push_back(Kernel::Triangle_3(p1, p2, p3));
+    }
+
+    //We update the AABBtree
+    if (!_poly.is_valid() || !_poly.is_closed())
+    {
+        std::cerr << "Error: The updated polygon is not valid or not closed." << std::endl;
+        return;
+    }
+    // Fix non-manifold issues
+    CGAL::Polygon_mesh_processing::duplicate_non_manifold_vertices(_poly);
+    CGAL::Polygon_mesh_processing::stitch_borders(_poly);
+    _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
+    _solid_bbox = _AABBtree->bbox();
+
+}
 void polygon::createPolygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
 {
     for (int i = 0; i < vertices.rows(); i++)
