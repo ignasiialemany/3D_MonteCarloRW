@@ -15,7 +15,7 @@
 
 struct parameters
 {
-    int cores;
+    int cores=1;
     int dimension = 3;
     std::string step_type = "constant";
     std::string transit_model;
@@ -36,25 +36,26 @@ public:
 
     simulation(const simulation &other) : _particles(other._particles){};
     // returning *this allows for chaining assignment operations
-    simulation &operator=(const simulation &other)
-    {
-        if (this != &other)
-        {
+    //simulation &operator=(const simulation &other)
+    //{
+        //if (this != &other)
+        //{
             // Copy all data members from the other object
-            this->_particles = other._particles;
-            this->params = other.params;
-        }
-        return *this;
-    }
+            //this->_particles = other._particles;
+            //this->params = other.params;
+        //}
+        //return *this;
+    //}
 
     bool seedParticlesInBox(const substrate &substrate);
     void performScan(substrate &substrate, const sequence &sequence);
+    void precomputeSubstrate(substrate &substrate, Eigen::VectorXd sequence_dt);
     void writeParticlesState(const std::string &file_path, substrate &sub){_particles->writeParameters(file_path,sub);};
     Particle& get_particle(int i){return _particles->get_particle(i);};
     template <typename URNG>
-    void one_dt(Particle &particle, substrate &substrate, URNG &rng_engine, double dt, double total_time);
+    void one_dt(Particle &particle, const substrate &substrate, URNG &rng_engine, double dt, int index_sequence, double total_time);
 
-    void one_walker(Particle &particle, substrate &substrate, const sequence &sequence);
+    void one_walker(Particle &particle, const substrate &substrate, const sequence &sequence);
     parameters params;
 
 private:

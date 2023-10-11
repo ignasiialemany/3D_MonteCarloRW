@@ -51,6 +51,11 @@ transform_info transform::global2local(const Eigen::Vector3d &global_position) c
 
 Eigen::Vector3d transform::local2global(const Eigen::Vector3d &local_position, int iX, int iY, int iZ) const
 {
+    if (isIdentity)
+    {
+        return local_position;
+    }
+    
     int iX_new = iX - 1;
     int iY_new = iY - 1;
     int iZ_new = iZ - 1;
@@ -83,7 +88,8 @@ void transform::set_block(double dx, double dy, double dz, double minY, double m
     Kernel::Point_3 min_point = Kernel::Point_3(0, 0, 0);
     Kernel::Point_3 max_point = Kernel::Point_3(dx, dy, dz);
 
-    _solid_block = CGAL::Bbox_3(0, 0, 0, dx, dy, dz);
+    //Compute centroid from min_point and max_point
+    _centroid_block = Eigen::Vector3d(dx/2, dy/2, dz/2);
     create_block(min_point, max_point);
     // Create y_slice_minmax
     // create a set of unique y-values
@@ -108,51 +114,34 @@ void transform::set_block(double dx, double dy, double dz, double minY, double m
 
 void transform::create_block(Kernel::Point_3 min_point, Kernel::Point_3 max_point)
 {
-    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> builder(_block.hds(), true);
-    builder.begin_surface(8, 12);
+    Eigen::MatrixXd ver(8,3);
+    Eigen::MatrixXd faces(12,3);
+    ver << min_point.x(), min_point.y(), min_point.z(),
+                max_point.x(), min_point.y(), min_point.z(),
+                max_point.x(), max_point.y(), min_point.z(),
+                min_point.x(), max_point.y(), min_point.z(),
+                min_point.x(), min_point.y(), max_point.z(),
+                max_point.x(), min_point.y(), max_point.z(),
+                max_point.x(), max_point.y(), max_point.z(),
+                min_point.x(), max_point.y(), max_point.z();
+    faces << 0, 1, 2,
+             0, 2, 3,
+             4, 6, 5,
+             4, 7, 6,
+             0, 4, 5,
+             0, 5, 1,
+             1, 5, 6,
+             1, 6, 2,
+             2, 6, 7,
+             2, 7, 3,
+             3, 7, 4,
+             3, 4, 0;
+    ;
+    faces = faces.array() + 1;
+    _block = polyhedronSet(ver, faces);    
+}
 
-    // Add vertices
-    std::vector<Kernel::Point_3> vertices = {
-        min_point,
-        Kernel::Point_3(max_point.x(), min_point.y(), min_point.z()),
-        Kernel::Point_3(max_point.x(), max_point.y(), min_point.z()),
-        Kernel::Point_3(min_point.x(), max_point.y(), min_point.z()),
-        Kernel::Point_3(min_point.x(), min_point.y(), max_point.z()),
-        Kernel::Point_3(max_point.x(), min_point.y(), max_point.z()),
-        max_point,
-        Kernel::Point_3(min_point.x(), max_point.y(), max_point.z())};
 
-    for (const auto &vertex : vertices)
-    {
-        builder.add_vertex(vertex);
-    }
-
-    // Add faces (as triangles)
-    std::vector<std::vector<int>> triangle_face_indices = {
-        {0, 1, 2}, // Face 0
-        {0, 2, 3}, // Face 1
-        {4, 6, 5}, // Face 2
-        {4, 7, 6}, // Face 3
-        {0, 4, 5}, // Face 4
-        {0, 5, 1}, // Face 5
-        {1, 5, 6}, // Face 6
-        {1, 6, 2}, // Face 7
-        {2, 6, 7}, // Face 8
-        {2, 7, 3}, // Face 9
-        {3, 7, 4}, // Face 10
-        {3, 4, 0}  // Face 11
-    };
-    for (const auto &face : triangle_face_indices)
-    {
-        builder.begin_facet();
-        for (int vertex_index : face)
-        {
-            builder.add_vertex_to_facet(vertex_index);
-        }
-        Kernel::Triangle_3 face_triangle = Kernel::Triangle_3(vertices[face[0]], vertices[face[1]], vertices[face[2]]);
-        triangles.push_back(face_triangle);
-        builder.end_facet();
-    }
-    builder.end_surface();
-    _AABBtree = std::make_shared<Tree_AABB>(triangles.begin(), triangles.end());
+void transform::precomputeTransform(Eigen::VectorXd &sequence_dt, std::function<double(double)> &strain){
+    _block.precomputePolygons(_centroid_block,sequence_dt,strain);
 }

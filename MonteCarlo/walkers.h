@@ -9,6 +9,7 @@
 
 struct Particle
 {
+    std::string buffer;
     Eigen::Vector3d position = Eigen::Vector3d::Zero(3);
     Eigen::Vector3d phase = Eigen::Vector3d::Zero(3);
     unsigned int flag = 0;

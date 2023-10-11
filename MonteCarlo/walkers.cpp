@@ -66,14 +66,22 @@ void walkers::writeParameters(const std::string &filename, substrate &sub)
     fileWriter file(filepath);
     std::string header = "positionX, positionY, positionZ, phaseX, phaseY, phaseZ, myocyte_index, flag \n";
     file.addHeader(header);
+    std::string buffer;
     for (int i = 0; i < _number_of_particles; i++)
     {
         Particle &particle = get_particle(i);
         auto transform = sub.getLocalFromGlobal(particle.position);
         auto local_pos = transform.local_position;
         std::string text = std::to_string(local_pos(0)) + "," + std::to_string(local_pos(1)) + "," + std::to_string(local_pos(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "," + std::to_string(particle.myocyte_index) + "," + std::to_string(particle.flag) + "\n";
-        file.write(text);
+        buffer += text;
+
+        if (i%1000 == 0)
+        {
+            file.write(buffer);
+            buffer.clear();
+        }
     }
+    file.write(buffer);
 }
 
 void walkers::initializeFiles()

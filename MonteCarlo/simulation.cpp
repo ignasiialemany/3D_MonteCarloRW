@@ -24,6 +24,11 @@ bool simulation::seedParticlesInBox(const substrate &substrate)
     return true;
 }
 
+void simulation::precomputeSubstrate(substrate &substrate, Eigen::VectorXd sequence_dt)
+{
+    substrate.preComputeSubstrate(sequence_dt);
+}
+
 boost::variant<bool, std::runtime_error> simulation::checkBoundingBox(const Eigen::VectorXd &box)
 {
     int dimensions = (int)box.size() / 2;
@@ -59,10 +64,14 @@ void simulation::writeToFile(Particle &particle)
 {
     // Add particle.position, particle.myocyte_index, particle.seed, particle.index
     std::string text = std::to_string(particle.position(0)) + "," + std::to_string(particle.position(1)) + "," + std::to_string(particle.position(2)) + "," + std::to_string(particle.phase(0)) + "," + std::to_string(particle.phase(1)) + "," + std::to_string(particle.phase(2)) + "," + std::to_string(particle.myocyte_index) + "," + std::to_string(particle.flag) + "\n";
-    particle.file.write(text);
+    particle.buffer += text;
+    if (particle.buffer.size() >= 5000) {
+        particle.file.write(particle.buffer);
+        particle.buffer.clear();
+    }
 }
 
-void simulation::performScan(substrate &substrate, const sequence &sequence)
+void simulation::performScan(substrate &substrate_input, const sequence &sequence)
 {
     if (params.isOutput)
     {
@@ -70,16 +79,24 @@ void simulation::performScan(substrate &substrate, const sequence &sequence)
     }
 
     int completed_particles = 0;
-#pragma omp parallel num_threads(params.cores) default(none) shared(_particles, params, substrate, sequence, std::cout, completed_particles)
+    
+#pragma omp parallel num_threads(params.cores) default(none) shared(_particles, params, sequence, substrate_input,std::cout, completed_particles)
     {
 #pragma omp for
         for (int index_particle = 0; index_particle < _particles->get_number_of_particles(); index_particle++)
         {
             Particle &particle = _particles->get_particle(index_particle);
             particle.index = index_particle;
+            if (particle.index == 49){
+                double xcfasio = 4;
+            }
             try
             {
-                one_walker(particle, substrate, sequence);
+                one_walker(particle, substrate_input, sequence);
+                if (particle.buffer.size() > 0) {
+                    particle.file.write(particle.buffer);
+                    particle.buffer.clear();
+                }
             }
             catch (const std::exception &ex)
             {
@@ -99,9 +116,9 @@ void simulation::performScan(substrate &substrate, const sequence &sequence)
     std::cout << "Simulation finished" << std::endl;
 }
 
-void simulation::one_walker(Particle &particle, substrate &substrate, const sequence &sequence)
+void simulation::one_walker(Particle &particle, const substrate &substrate, const sequence &sequence)
 {
-    particle.myocyte_index = substrate.searchPolygon(particle.position, "global");
+    particle.myocyte_index = substrate.searchPolygon(particle.position, 0, "global");
     std::mt19937 rng_engine(particle.seed);
     double total_time = 0;
     
@@ -110,16 +127,16 @@ void simulation::one_walker(Particle &particle, substrate &substrate, const sequ
         // Get dT and dG values
         double dt_magnitude = sequence.dt(i);
         double dG_magnitude = sequence.gG(i);
-        total_time = total_time + dt_magnitude;
+        
         particle.phase = particle.phase + (dG_magnitude * dt_magnitude) * particle.position;
         // Initialize counter and flags
-        int counter = 0;
         bool step_success = false;
+        int counter = 0;
 
         while (!step_success)
         {
             counter++;
-            if (counter > 50)
+            if (counter > 10)
             {
                 particle.flag = 2;
                 // std::cout << "Particle index COUNTER REACHED" << particle.index << " " << std::endl;
@@ -128,13 +145,14 @@ void simulation::one_walker(Particle &particle, substrate &substrate, const sequ
 
             try
             {
-
-                one_dt(particle, substrate, rng_engine, dt_magnitude, total_time);
+                //We do i+1 because i=0 corresponds to the original frame and we are stepping to the next frame
+                one_dt(particle, substrate, rng_engine, dt_magnitude, i+1, total_time);
                 if (params.isOutput)
                 {
                     writeToFile(particle);
                 }
                 step_success = true;
+                total_time = total_time + dt_magnitude;
             }
             catch (const std::exception &ex)
             {
@@ -157,6 +175,8 @@ void simulation::one_walker(Particle &particle, substrate &substrate, const sequ
                         // Runtime error is in intersection, just repeat one_dt with another step
                         continue;
                     }
+                    //particle.position = particle.position + Eigen::Vector3d::Constant(1e-6);
+                    continue;
                 }
             }
         }
@@ -198,7 +218,7 @@ Eigen::Vector3d simulation::getStep(URNG &rng_engine, int dimension, std::string
 }
 
 template <typename URNG>
-void simulation::one_dt(Particle &particle, substrate &substrate, URNG &rng_engine, double dt, double total_time)
+void simulation::one_dt(Particle &particle, const substrate &substrate, URNG &rng_engine, double dt, int index_sequence, double total_time)
 {
     // Get step
     Eigen::Vector3d step = simulation::getStep(rng_engine, params.dimension, params.step_type);
@@ -223,6 +243,27 @@ void simulation::one_dt(Particle &particle, substrate &substrate, URNG &rng_engi
     Eigen::Vector3d local_position = transform_data.local_position;
     Eigen::Vector3d local_step = utility_substrate::rotate_y(step, -transform_data.angle);
 
+    double strain_value = substrate.getStrain(total_time);
+    double strain_value_dt = substrate.getStrain(total_time + dt);
+
+    Eigen::Vector3d block_centroid = substrate.get_block_centroid();
+
+    //Update particle position based on strain
+    Eigen::Vector3d relative_position = local_position - block_centroid;
+
+    double x0 = relative_position(0) * std::sqrt((1 + strain_value));
+    double y0 = relative_position(1) * std::sqrt((1 + strain_value));
+    double z0 = relative_position(2) / (1 + strain_value);
+
+    relative_position(0) = x0 / std::sqrt((1 + strain_value_dt));
+    relative_position(1) = y0 / std::sqrt((1 + strain_value_dt));
+    relative_position(2) = (1 + strain_value_dt) * z0;
+
+    local_position = relative_position + block_centroid;
+    //auto end = std::chrono::high_resolution_clock::now(); // end timer
+    //std::chrono::duration<double> elapsed = end - start;
+    //std::cout << "Elapsed time to move substrate: " << elapsed.count() << " seconds" << std::endl;
+
     while (local_step.norm() > convergence_eps)
     {
         Eigen::Vector3d local_normalized_step = local_step / local_step.norm();
@@ -233,13 +274,13 @@ void simulation::one_dt(Particle &particle, substrate &substrate, URNG &rng_engi
 
         //Check that the particle is in cardiomycocyte
         if (particle.myocyte_index!=-1){
-            if (substrate.searchPolygon(local_position)==-1){
+            if (substrate.searchPolygon(local_position, index_sequence)==-1){
                D_coeff_old = params.D_ecs;
             }
             D_coeff_old = params.D_ics;
         }
         else{
-            if (substrate.searchPolygon(local_position)!=-1){
+            if (substrate.searchPolygon(local_position, index_sequence)!=-1){
                 D_coeff_old = params.D_ics;
             }
             D_coeff_old = params.D_ecs;
@@ -261,8 +302,7 @@ void simulation::one_dt(Particle &particle, substrate &substrate, URNG &rng_engi
         // throw std::logic_error("Particle myocyte index does not match the index of the polygon it is in");
         //}
         // Get intersection data
-        // PASS IN TOTAL_TIME AS INPUT
-        boost::optional<std::tuple<int, double, Eigen::Vector3d>> intersection_data = substrate.intersectPolygon(local_position, local_step, total_time);
+        boost::optional<std::tuple<int, double, Eigen::Vector3d>> intersection_data = substrate.intersectPolygon(local_position, local_step, index_sequence);
 
         // If intersection is type bool and false
         if (intersection_data)
@@ -345,19 +385,45 @@ void simulation::one_dt(Particle &particle, substrate &substrate, URNG &rng_engi
         }
         else
         {
-            boost::optional<double> intersection_block = substrate.intersectionBlock(local_position, local_step);
+            //TODO: Implement boundary conditions, "reflective" and "periodic"(currently is the one that is implemented if it's not none)
+            if(substrate.getBoundaryType() == "none")
+            {
+                local_position = local_position + local_step;
+                remaining_step = Eigen::Vector3d::Zero(3);
+                local_step = remaining_step;
+                continue;
+            }
+
+            // Get intersection with block
+            boost::optional<std::tuple<int, double, Eigen::Vector3d>> intersection_block = substrate.intersectionBlock(local_position, local_step, index_sequence);
 
             // If it intersects with block
             if (intersection_block)
             {
-                double distance = (*intersection_block);
+
+                int block_face = std::get<0>(*intersection_block);
+                double distance = std::get<1>(*intersection_block);
+                Eigen::Vector3d normal = std::get<2>(*intersection_block);
+
+                // Compute remaining_step and step_to_intersection
                 remaining_step = local_normalized_step * (local_step.norm() - distance);
                 Eigen::Vector3d step_to_intersection = local_normalized_step * distance;
-                // Update position to intersection + epsilon
-                local_position = local_position + step_to_intersection;
-                local_position = local_position + remaining_step * 1e-6;
-                remaining_step = remaining_step * (1 - 1e-6);
 
+                local_position = local_position + step_to_intersection;
+
+                if (substrate.getBoundaryType() == "reflective")
+                {
+                     Eigen::Vector3d reflected_step_normalized = local_normalized_step - 2 * normal * normal.dot(local_normalized_step);
+                     remaining_step = reflected_step_normalized * remaining_step.norm();
+                     local_position = local_position + reflected_step_normalized * 1e-6;
+                    remaining_step = remaining_step * (1 - 1e-6);
+                }
+                else{
+                    //This is for periodic boundary conditions
+                    local_position = local_position + remaining_step * 1e-8;
+                    remaining_step = remaining_step * (1 - 1e-8);
+                }
+                
                 // Get global position position now and update local_position
                 Eigen::Vector3d global_position_after_block = substrate.getGlobalFromLocal(local_position, transform_data.iX, transform_data.iY, transform_data.iZ);
                 Eigen::Vector3d global_step = utility_substrate::rotate_y(remaining_step, transform_data.angle);
@@ -365,13 +431,10 @@ void simulation::one_dt(Particle &particle, substrate &substrate, URNG &rng_engi
                 // Recalculate transform data and local data (note that local_step is also rotated back might be that block falls into new angle)
                 transform_data = substrate.getLocalFromGlobal(global_position_after_block);
 
-                //Can we do any type of check? Maybe check the highest diff between the two local positions?
-                
-
                 local_position = transform_data.local_position;
                 remaining_step = utility_substrate::rotate_y(global_step, -transform_data.angle);
 
-                int possible_myo = substrate.searchPolygon(local_position);
+                int possible_myo = substrate.searchPolygon(local_position, index_sequence);
 
                 if (possible_myo != -1)
                 {
@@ -413,7 +476,7 @@ void simulation::one_dt(Particle &particle, substrate &substrate, URNG &rng_engi
     particle.position = next_global_position;
 }
 
-template void simulation::one_dt<oneGenerator>(Particle &particle, substrate &substrate, oneGenerator &rng_engine, double dt, double total_time);
-template void simulation::one_dt<std::mt19937>(Particle &particle, substrate &substrate, std::mt19937 &rng_engine, double dt, double total_time);
+template void simulation::one_dt<oneGenerator>(Particle &particle, const substrate &substrate, oneGenerator &rng_engine, double dt, int index_sequence, double total_time);
+template void simulation::one_dt<std::mt19937>(Particle &particle, const substrate &substrate, std::mt19937 &rng_engine, double dt, int index_sequence, double total_time);
 template Eigen::Vector3d simulation::getStep<oneGenerator>(oneGenerator &rng_engine, int dimension, std::string step_type);
 template Eigen::Vector3d simulation::getStep<std::mt19937>(std::mt19937 &rng_engine, int dimension, std::string step_type);

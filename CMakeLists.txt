@@ -4,10 +4,10 @@ set(CMAKE_CXX_COMPILER "/opt/homebrew/opt/gcc/bin/g++-13")
 set(CMAKE_CXX_STANDARD 14)
 project(3DRandomWalk)
 
-set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_BUILD_TYPE "Release")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Choose your desired optimization level and floating-point settings
-    set(OPTIMIZATION_LEVEL "-O0") 
+    set(OPTIMIZATION_LEVEL "-O3") 
     set(FP_CONSISTENCY_FLAGS "")
 
     # Apply the same optimization level and floating-point settings to Debug and Release configurations

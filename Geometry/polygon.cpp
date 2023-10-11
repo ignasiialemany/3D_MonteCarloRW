@@ -18,20 +18,10 @@ polygon::polygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
     CGAL::Polygon_mesh_processing::stitch_borders(_poly);
     _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
     _solid_bbox = _AABBtree->bbox();
+    Kernel::Point_3 centroid_poly = CGAL::centroid(_vertices.begin(), _vertices.end());
+    centroid = Eigen::Vector3d(centroid_poly.x(), centroid_poly.y(), centroid_poly.z());
 }
 
-polygon::polygon(const std::string& filename){
-
-    offMeshReader reader;
-    reader.read(filename);
-    Eigen::MatrixXd vertices_mesh = reader.getVertices();
-    Eigen::MatrixXd faces_mesh = reader.getFaces();
-    createPolygon(vertices_mesh, faces_mesh);
-    CGAL::Polygon_mesh_processing::duplicate_non_manifold_vertices(_poly);
-    CGAL::Polygon_mesh_processing::stitch_borders(_poly);
-    _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
-    _solid_bbox = _AABBtree->bbox();
-}
 
 polygon::polygon(Polyhedron &poly)
 {
@@ -49,7 +39,7 @@ polygon::polygon(Polyhedron &poly)
     // Iterate over vertices and get min and max vertices
     _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
     _solid_bbox = _AABBtree->bbox();
-
+    
     // Fill in _vertices and _faces
     for (Polyhedron::Vertex_iterator vertex_it = _poly.vertices_begin(); vertex_it != _poly.vertices_end(); ++vertex_it)
     {
@@ -68,6 +58,43 @@ polygon::polygon(Polyhedron &poly)
                                                   (std::size_t)std::distance(_vertices.begin(), std::find(_vertices.begin(), _vertices.end(), p3))});
     }
 }
+
+// Copy constructor
+polygon::polygon(const polygon& other)
+    : _poly(other._poly), _bbox(other._bbox), _solid_bbox(other._solid_bbox),
+      mesh(other.mesh), _vertices(other._vertices), _faces(other._faces),
+      centroid(other.centroid)
+{
+    double xafsdf=2343;
+    // If you have dynamically allocated resources (e.g., pointers), you should copy them here.
+    // For example, if you have a dynamically allocated array:
+    // _someData = new SomeType[other.size];
+    // Copy the data from 'other' to '_someData' here.
+}
+
+// Copy assignment operator
+polygon& polygon::operator=(const polygon& other)
+{
+    if (this != &other) // Self-assignment check
+    {
+        // Copy all data members from 'other' to 'this' object.
+        _poly = other._poly;
+        _bbox = other._bbox;
+        _solid_bbox = other._solid_bbox;
+        mesh = other.mesh;
+        _vertices = other._vertices;
+        _faces = other._faces;
+        centroid = other.centroid;
+
+        // If you have dynamically allocated resources (e.g., pointers), you should copy them here.
+        // For example, if you have a dynamically allocated array:
+        // delete[] _someData; // Delete the existing data (if any).
+        // _someData = new SomeType[other.size];
+        // Copy the data from 'other' to '_someData' here.
+    }
+    return *this;
+}
+
 
 double polygon::computeVolume()
 {
@@ -105,50 +132,60 @@ double polygon::computeSurface()
     return surface_area;
 }
 
-Eigen::MatrixXd polygon::compute_vertex_displacement(CGAL::Polyhedron_3<Kernel>& poly, double time, double strain)
+
+boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
 {
-    // Compute vertices (std::vector<Kernel::Point_3>)
-    std::vector<Kernel::Point_3> poly_verticies;
-    for (Polyhedron::Vertex_iterator vertex_it = poly.vertices_begin(); vertex_it != poly.vertices_end(); ++vertex_it)
+    // Convert point and step to ExactKernel types
+    Kernel::Point_3 source(point(0), point(1), point(2));
+    Kernel::Point_3 target(step(0) + point(0), step(1) + point(1), step(2) + point(2));
+    Kernel::Segment_3 segment(source, target);
+
+    // Now use exact computations to find intersections
+    std::vector<std::pair<boost::variant<Kernel::Point_3, Kernel::Segment_3>, Primitive>> intersections;
+    _AABBtree->all_intersections(segment, std::back_inserter(intersections));
+
+    if (intersections.size() == 0)
     {
-        poly_verticies.push_back(vertex_it->point());
+        return boost::optional<std::pair<int, double>>();
     }
 
-    Polyhedron::Point centroid = CGAL::centroid(poly_verticies.begin(), poly_verticies.end());
-    //Convert centroid to Eigen::Vector3d
-    Eigen::Vector3d centroid_point(centroid.x(), centroid.y(), centroid.z());
+    std::set<Kernel::Point_3> unique_intersection_points;
+    double min_distance = std::numeric_limits<double>::max();  // Start with a large value
+    Kernel::Point_3 closest_point;
+    int index_closest_face=-1;
 
-    // Iterate over vertices and find dispacement based on strain
-    Eigen::MatrixXd displacement(poly.size_of_vertices(), 3);
-    int i = 0;
-    for (Polyhedron::Vertex_iterator vertex_it = poly.vertices_begin(); vertex_it != poly.vertices_end(); ++vertex_it)
+    for(const auto& intersection : intersections)
     {
-        Eigen::Vector3d vertex_position(vertex_it->point().x(), vertex_it->point().y(), vertex_it->point().z());
-        vertex_position = vertex_position - centroid_point;
+        if(auto *pt = boost::get<Kernel::Point_3>(&intersection.first))
+        {
+            if (unique_intersection_points.find(*pt) == unique_intersection_points.end())  // Check if the point is new
+            {
+                double distance = CGAL::sqrt(CGAL::squared_distance(source, *pt));
+                unique_intersection_points.insert(*pt);
 
-        //For displacements row component 0 and 1 do not change
-        displacement(i, 0) = (1/std::sqrt(1+strain))*vertex_position(0) - vertex_position(0);
-        displacement(i, 1) = (1/std::sqrt(1+strain))*vertex_position(1) - vertex_position(1);
-        displacement(i, 2) = strain*vertex_position(2);
-        i++;        
+                if (distance < min_distance)  // Update the closest point if needed
+                {
+                    min_distance = distance;
+                    closest_point = *pt;
+                    index_closest_face = (intersection.second.id() - triangle_faces.begin());
+                }
+            }
+        }
     }
-
-    return displacement;
+    if (min_distance == std::numeric_limits<double>::max() || index_closest_face == -1)
+    {
+        throw std::runtime_error("Polygon::intersection -> Segment overlaps an edge");
+    }
+    return std::pair<int,double>(index_closest_face, min_distance);
 }
 
-
-boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step, const double time, std::function<double(double)> strain)
+/*
+boost::optional<std::pair<int, double>> polygon::intersectionSecond(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const
 {
-    double strain_vec = strain(time);
-
-    Eigen::MatrixXd displacements = compute_vertex_displacement(_poly, time, strain_vec);
-
-    updatePolygon(displacements);
-   
-
     Kernel::Segment_3 segment(Kernel::Point_3(point(0), point(1), point(2)), Kernel::Point_3(step(0) + point(0), step(1) + point(1), step(2) + point(2)));
     std::vector<std::pair<boost::variant<Kernel::Point_3, Kernel::Segment_3>, Primitive>> intersections;
     _AABBtree->all_intersections(segment, std::back_inserter(intersections));
+    auto check_box_intersection_updated = _AABBtree->bbox();
     double min_distance = std::numeric_limits<double>::max();
     int min_index = -1;
 
@@ -177,11 +214,10 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
                                                                                                                                    CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge2))),
                                                                                                                                    CGAL::sqrt(CGAL::to_double(CGAL::squared_distance(point_intersected, edge3)))));
 
-            //We have commented THIS as may not be relevant? What if it's close to an edge? 
             // Check if the point is too close to an edge
-            //if (min_edge_distance < 1e-8)
+            //if (min_edge_distance < 1e-18)
             //{
-              //  throw std::runtime_error("Polygon::intersection -> Intersection found but point is too close to an edge, uncertain");
+              //throw std::runtime_error("Polygon::intersection -> Intersection found but point is too close to an edge, uncertain");
             //}
 
             Kernel::FT squared_distance = CGAL::squared_distance(point_intersected, segment.source());
@@ -191,15 +227,9 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
                 auto iter = intersection.second.id();
                 min_index = (iter - triangle_faces.begin());
                 min_distance = distance;
-            }
-            //}
-            // else
-            //{
-            //   throw std::runtime_error("Polygon::intersection -> Intersection found but point is not on face, uncertain");
-            //}
+            } 
         }
-        else
-        {
+        else{
             throw std::runtime_error("Polygon::intersection -> Intersection found but segment is parallel and lies on face");
         }
     }
@@ -212,13 +242,12 @@ boost::optional<std::pair<int, double>> polygon::intersection(const Eigen::Vecto
     double t = CGAL::to_double(min_distance) / step.norm();
     if ((1 - t) < 1e-8 || t < 1e-8)
     {
-        throw std::runtime_error("Polygon::intersection -> Remaining step is too short, might be uncertain");
+       throw std::runtime_error("Polygon::intersection -> Remaining step is too short, might be uncertain");
     }
-
 
     return std::pair<int, double>(min_index, min_distance);
 }
-
+*/
 bool polygon::containsPoint(const Eigen::Vector3d &point) const
 {
     if (_solid_bbox.xmin() > point(0) || _solid_bbox.xmax() < point(0) || _solid_bbox.ymin() > point(1) ||
@@ -231,25 +260,38 @@ bool polygon::containsPoint(const Eigen::Vector3d &point) const
 
     // Find all intersections between the ray and the triangles in the AABB tree
     std::vector<std::pair<boost::variant<Kernel::Point_3, Kernel::Segment_3>, Primitive>> intersections;
-    _AABBtree->all_intersections(ray, std::back_inserter(intersections));
+
+   _AABBtree->all_intersections(ray, std::back_inserter(intersections));
+
+    std::set<Kernel::Point_3> unique_intersection_points;
 
     for (const auto &intersection : intersections)
     {
         if (intersection.first.which() == 0)
         {
             Kernel::Point_3 point_intersected = boost::get<Kernel::Point_3>(intersection.first);
-            Primitive intersection_primitive = intersection.second;
-            auto iter = intersection_primitive.id();
-            int index = iter - triangle_faces.begin();
-            if (triangle_faces[index].has_on(ray.source()))
+
+            // Rounding to some desired precision (for example, 6 decimal places)
+            double x = std::round(point_intersected.x() * 10000) / 10000;
+            double y = std::round(point_intersected.y() * 10000) / 10000;
+            double z = std::round(point_intersected.z() * 10000) / 10000;
+
+            Kernel::Point_3 rounded_point(x, y, z);
+
+            if (unique_intersection_points.find(rounded_point) == unique_intersection_points.end())
             {
-                return true;
+                unique_intersection_points.insert(rounded_point);
+
+                Primitive intersection_primitive = intersection.second;
+                auto iter = intersection_primitive.id();
+                int index = iter - triangle_faces.begin();
+
+                // Now, process the intersection...
             }
         }
     }
-
     // Check if the number of intersections is odd
-    return (intersections.size() % 2) == 1;
+    return (unique_intersection_points.size() % 2) == 1;
 }
 
 Eigen::Vector3d polygon::getNormalVector(int index_face) const
@@ -331,42 +373,6 @@ bool polygon::isPolygonClosed()
     return true;
 }
 
-void polygon::updatePolygon(const Eigen::MatrixXd &displacement){
-   //Iterate over _vertices and add the displacement
-    int i = 0;
-    for (Polyhedron::Vertex_iterator vertex_it = _poly.vertices_begin(); vertex_it != _poly.vertices_end(); ++vertex_it)
-    {
-        Eigen::Vector3d vertex_position(vertex_it->point().x(), vertex_it->point().y(), vertex_it->point().z());
-        Eigen::Vector3d displacement_vec = displacement.row(i);
-        vertex_position = vertex_position + displacement_vec;
-        vertex_it->point() = Kernel::Point_3(vertex_position(0), vertex_position(1), vertex_position(2));
-        i++;
-    }
-    //Clear triangle_faces and reupdate 
-    triangle_faces.clear();
-    for (Polyhedron::Facet_iterator facet_it = _poly.facets_begin(); facet_it != _poly.facets_end(); ++facet_it)
-    {
-        Polyhedron::Halfedge_around_facet_circulator he_circ = facet_it->facet_begin();
-        Polyhedron::Point_3 p1 = he_circ->vertex()->point();
-        Polyhedron::Point_3 p2 = he_circ->next()->vertex()->point();
-        Polyhedron::Point_3 p3 = he_circ->next()->next()->vertex()->point();
-        // create std::vector<std::size_t> for each face
-        triangle_faces.push_back(Kernel::Triangle_3(p1, p2, p3));
-    }
-
-    //We update the AABBtree
-    if (!_poly.is_valid() || !_poly.is_closed())
-    {
-        std::cerr << "Error: The updated polygon is not valid or not closed." << std::endl;
-        return;
-    }
-    // Fix non-manifold issues
-    CGAL::Polygon_mesh_processing::duplicate_non_manifold_vertices(_poly);
-    CGAL::Polygon_mesh_processing::stitch_borders(_poly);
-    _AABBtree = std::make_unique<Tree_AABB>(triangle_faces.begin(), triangle_faces.end());
-    _solid_bbox = _AABBtree->bbox();
-
-}
 void polygon::createPolygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces)
 {
     for (int i = 0; i < vertices.rows(); i++)
@@ -403,44 +409,4 @@ void polygon::createPolygon(const Eigen::MatrixXd &vertices, const Eigen::Matrix
         _faces.push_back(face_input);
     }
     B.end_surface();
-}
-
-// TODO: move this function to utility class, same is applied to transform.cpp
-void polygon::createBbox(Kernel::Point_3 min_point, Kernel::Point_3 max_point)
-{
-
-    CGAL::Polyhedron_incremental_builder_3<HalfedgeDS> builder(_bbox.hds(), true);
-    builder.begin_surface(8, 12);
-    std::vector<Kernel::Triangle_3> triangles;
-
-    // Add vertices
-    std::vector<Kernel::Point_3> vertices = {
-        min_point,
-        Kernel::Point_3(max_point.x(), min_point.y(), min_point.z()),
-        Kernel::Point_3(max_point.x(), max_point.y(), min_point.z()),
-        Kernel::Point_3(min_point.x(), max_point.y(), min_point.z()),
-        Kernel::Point_3(min_point.x(), min_point.y(), max_point.z()),
-        Kernel::Point_3(max_point.x(), min_point.y(), max_point.z()),
-        max_point,
-        Kernel::Point_3(min_point.x(), max_point.y(), max_point.z())};
-
-    for (const auto &vertex : vertices)
-    {
-        builder.add_vertex(vertex);
-    }
-
-    // Add faces (as triangles)
-    std::vector<std::vector<int>> triangle_face_indices = {
-        {0, 1, 2}, {0, 2, 3}, {4, 5, 6}, {4, 6, 7}, {0, 1, 5}, {0, 5, 4}, {1, 2, 6}, {1, 6, 5}, {2, 3, 7}, {2, 7, 6}, {3, 0, 4}, {3, 4, 7}};
-
-    for (const auto &face : triangle_face_indices)
-    {
-        builder.begin_facet();
-        for (int vertex_index : face)
-        {
-            builder.add_vertex_to_facet(vertex_index);
-        }
-        builder.end_facet();
-    }
-    builder.end_surface();
 }

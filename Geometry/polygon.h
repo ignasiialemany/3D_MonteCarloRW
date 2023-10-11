@@ -52,7 +52,6 @@
 #include <CGAL/Polygon_mesh_processing/remesh.h>
 #include <CGAL/Surface_mesh/IO/PLY.h>
 #include <CGAL/Surface_mesh/Surface_mesh.h>
-#include "../Utility/offMeshReader.h"
 //typedef CGAL::Simple_cartesian<long double> Kernel;
 typedef CGAL::Simple_cartesian<double> Kernel;
 typedef CGAL::Polyhedron_3<Kernel> Polyhedron;
@@ -64,23 +63,30 @@ typedef std::vector<Kernel::Triangle_3>::iterator Iterator;
 typedef CGAL::AABB_triangle_primitive<Kernel, Iterator> Primitive;
 typedef CGAL::AABB_traits<Kernel, Primitive> AABB_triangle_traits;
 typedef CGAL::AABB_tree<AABB_triangle_traits> Tree_AABB;
+typedef CGAL::Exact_predicates_exact_constructions_kernel ExactKernel;
 
 class polygon
 {
 public:
     polygon() = default;
     //Add deconstructor
-    polygon(const std::string &filename);
     polygon(const Eigen::MatrixXd &vertices_input, const Eigen::MatrixXd &faces_input);
     polygon(Polyhedron &poly);
+    polygon(const polygon& other);
+    polygon& operator=(const polygon& other);
+
 
     double computeVolume();
     double computeSurface();
     Polyhedron getPolyhedron() { return _poly; };
     Polyhedron getBbox() { return _bbox; };
-    CGAL::Bbox_3 getSolidBbox() { return _solid_bbox; };
-    // boost::variant<bool, std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step);
-    boost::optional<std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step, const double time,std::function<double(double)> strain);
+    CGAL::Bbox_3 getSolidBbox() const { return _solid_bbox; };
+    
+    boost::optional<std::pair<int, double>> intersection(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
+    //boost::optional<std::pair<int, double>> intersectionSecond(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
+
+    //boost::optional<std::pair<int, double>> intersectionSecond(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
+    //boost::optional<std::pair<int, double>> intersectionForBlock(const Eigen::Vector3d &point, const Eigen::Vector3d &step) const;
 
     // bool containsPoint(const Eigen::Vector3d &point);
     bool containsPoint(const Eigen::Vector3d &point) const;
@@ -89,6 +95,10 @@ public:
     std::vector<std::vector<std::size_t>> getFaces() const { return _faces; };
     bool isPolygonClosed();
     Mesh getMesh() { return mesh; };
+    void updatePolygon(double strain, Eigen::Vector3d& centroid);
+    Eigen::Vector3d getCentroid() const { return centroid; };
+        std::vector<Kernel::Triangle_3> triangle_faces;
+
 
 private:
     // TODO: Might delete some of these variables, probably _vertices and _faces
@@ -98,13 +108,10 @@ private:
     Mesh mesh;
     void createBbox(Kernel::Point_3 min_point, Kernel::Point_3 max_point);
     void createPolygon(const Eigen::MatrixXd &vertices, const Eigen::MatrixXd &faces);
-    Eigen::MatrixXd compute_vertex_displacement(CGAL::Polyhedron_3<Kernel>& poly, double time, double strain);
-    void updatePolygon(const Eigen::MatrixXd &displacement);
     std::vector<CGAL::Point_3<Kernel>> _vertices;
     std::vector<std::vector<std::size_t>> _faces;
     std::unique_ptr<Tree_AABB> _AABBtree;
-    std::vector<Kernel::Triangle_3> triangle_faces;
-
+    Eigen::Vector3d centroid;
 };
 
 #endif // INC_3DRANDOMWALK_POLYGON_H
